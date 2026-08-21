@@ -158,7 +158,42 @@ def simulate_cashflow(
 
             d += timedelta(days=1)
 
-    # B. Ashwin Expected Settlement Deposits (Into Axis Bank)
+    # B. Mutual Fund SIPs & Insurance Premiums (from Axis Bank)
+    d = cur_date
+    while d <= end_date:
+        if d.day == 3 and d >= cur_date:
+            events_by_date[d].append({
+                "type": "sip",
+                "title": "Mutual Fund SIP 1 (INDIANESIGN)",
+                "description": "ACH e-mandate mutual fund SIP",
+                "account": "axis",
+                "amount": -1000.0,
+                "is_inflow": False,
+                "category": "Investments & Savings"
+            })
+        if d.day == 4 and d >= cur_date:
+            events_by_date[d].append({
+                "type": "sip",
+                "title": "Mutual Fund SIP 2 (INDIANESIGN)",
+                "description": "ACH e-mandate mutual fund SIP",
+                "account": "axis",
+                "amount": -1000.0,
+                "is_inflow": False,
+                "category": "Investments & Savings"
+            })
+        if d.day == 7 and d >= cur_date:
+            events_by_date[d].append({
+                "type": "insurance",
+                "title": "Health & Term Insurance Premium",
+                "description": "ICICI Bank / INDmoney protection plan",
+                "account": "axis",
+                "amount": -1389.0,
+                "is_inflow": False,
+                "category": "Insurance & Protection"
+            })
+        d += timedelta(days=1)
+
+    # C. Ashwin Expected Settlement Deposits (Into Axis Bank)
     if include_ashwin and final_ashwin_amt > 0:
         d = cur_date
         while d <= end_date:
@@ -174,7 +209,7 @@ def simulate_cashflow(
                 })
             d += timedelta(days=1)
 
-    # C. Bank Loan Auto-Debits
+    # D. Bank Loan Auto-Debits
     if not loans_df.empty:
         for _, l in loans_df.iterrows():
             deb_day = int(l.get("debit_day", 3))
