@@ -295,47 +295,40 @@ def master_debt_free_roadmap() -> str:
 
 
 @tool
-def master_liquidity_and_upcoming_outflows() -> str:
-    """Schedule of upcoming bill payment due dates and loan auto-debit dates across
-    the next 30 days, cross-referenced with bank account balances."""
-    loans_df = db.load_bank_loans()
-    cc_stmts = db.load_cc_statements()
+def master_liquidity_and_upcoming_outflows(horizon_days: int = 30) -> str:
+    """Proactive 30-day liquidity radar and day-by-day cashflow simulation.
+    Projects daily bank balances across Axis, Kotak 811, and SBI, factoring in salary credits,
+    Ashwin deposits, loan auto-debits, and CC due dates, alerting to buffer shortfalls."""
+    from finance.forecast import liquidity
 
-    out = ["**📅 Upcoming 30-Day Debt Payment & Auto-Debit Calendar:**\n"]
+    res = liquidity.simulate_cashflow(horizon_days=horizon_days)
+    summ = res["summary"]
+    events = res["events"]
+    transfers = res["recommended_transfers"]
+    alerts = res["alerts"]
 
-    items = []
-    if not loans_df.empty:
-        for _, l in loans_df.iterrows():
-            d_day = int(l.get("debit_day", 3))
-            items.append({
-                "day": d_day,
-                "label": f"{_ordinal(d_day)} of month",
-                "entity": f"🏦 {l['loan_name']} ({l['lender']})",
-                "account": f"Auto-debit from {l['account'].upper()}",
-                "amount": float(l["monthly_emi"]),
-                "type": "Loan Auto-Debit"
-            })
+    out = [
+        f"**⚡ Proactive {horizon_days}-Day Liquidity Radar & Cashflow Forecast:**\n",
+        f"• **Starting Total Liquid Reserves**: {_inr(summ['starting_liquid'])}",
+        f"• **Projected Ending Liquid Reserves**: {_inr(summ['ending_liquid'])}",
+        f"• **Lowest Projected Total Liquid Point**: {_inr(summ['min_total_liquid'])}",
+        f"\n**📅 Chronological Payment & Inflow Schedule (Next {horizon_days} Days):**"
+    ]
 
-    if not cc_stmts.empty:
-        for _, s in cc_stmts.iterrows():
-            due_d = s.get("due_date", "")
-            d_day = int(due_d[8:10]) if due_d and len(due_d) >= 10 else 15
-            items.append({
-                "day": d_day,
-                "label": f"Due on {due_d or 'Cycle End'}",
-                "entity": f"💳 {s['card_name']} (..{s.get('card_last4', '')})",
-                "account": "Credit Card Bill",
-                "amount": float(s["total_due"]),
-                "type": "Credit Card Due"
-            })
+    for ev in events:
+        sign = "+" if ev["is_inflow"] else "-"
+        out.append(f"• **{ev['date']}** [{ev['account'].upper()}]: **{sign}{_inr(abs(ev['amount']))}** ➔ {ev['title']} ({ev['category']})")
 
-    items = sorted(items, key=lambda x: x["day"])
-    tot_due_next_30 = sum(i["amount"] for i in items)
+    if transfers:
+        out.append("\n**💡 Proactive Internal Transfer Recommendations:**")
+        for t in transfers:
+            out.append(f"• **{t['date']}**: Transfer **{_inr(t['amount'])}** from **{t['from_account'].upper()}** ➔ **{t['to_account'].upper()}** ({t['reason']})")
 
-    for i in items:
-        out.append(f"• **{i['label']}**: **{_inr(i['amount'])}** ➔ {i['entity']} ({i['account']})")
+    if alerts:
+        out.append("\n**⚠️ Liquidity Buffer Alerts:**")
+        for al in alerts:
+            out.append(f"• **{al['date']}**: {al['message']} *({al['action']})*")
 
-    out.append(f"\n**Total Outflow Required in Next 30 Days**: {_inr(tot_due_next_30)}")
     return "\n".join(out)
 
 

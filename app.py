@@ -1874,35 +1874,150 @@ def tab_bank_loans():
                     st.rerun()
 
 
+# --------------------------------------------------------------------------
+# Tab: ⚡ 30-Day Proactive Liquidity Radar & Cashflow Simulator
+# --------------------------------------------------------------------------
+
+def tab_liquidity_radar():
+    from finance.forecast import liquidity
+
+    st.header("⚡ 30-Day Proactive Liquidity Radar", divider=True)
+    st.caption("Day-by-day multi-bank cashflow forecasting, shortfall protection, and proactive internal transfer optimizer.")
+
+    # 1. Interactive Simulator Controls
+    with st.expander("🛠️ Simulator Scenario & Cashflow Controls", expanded=False):
+        c_sc1, c_sc2, c_sc3 = st.columns(3)
+        with c_sc1:
+            horizon = st.slider("Simulation Horizon (Days)", min_value=15, max_value=60, value=30, step=5, key="sim_horizon")
+            daily_burn_val = st.slider("Daily Lifestyle Burn (₹/day)", min_value=0, max_value=2000, value=600, step=50, key="sim_burn")
+        with c_sc2:
+            inc_ashwin = st.checkbox("Include Ashwin Monthly Deposit", value=True, key="sim_inc_ashwin")
+            ashwin_day = st.slider("Expected Ashwin Deposit Day", min_value=1, max_value=25, value=10, key="sim_ashwin_day")
+        with c_sc3:
+            inc_salary = st.checkbox("Include Monthly Salary Credit", value=True, key="sim_inc_salary")
+            salary_day_val = st.slider("Expected Salary Credit Day", min_value=25, max_value=31, value=29, key="sim_salary_day")
+
+    # Run Simulation
+    sim = liquidity.simulate_cashflow(
+        horizon_days=horizon,
+        include_salary=inc_salary,
+        salary_day=salary_day_val,
+        include_ashwin=inc_ashwin,
+        ashwin_deposit_day=ashwin_day,
+        daily_burn=float(daily_burn_val)
+    )
+
+    summ = sim["summary"]
+    df_sim = sim["daily_df"]
+    transfers = sim["recommended_transfers"]
+    alerts = sim["alerts"]
+    events = sim["events"]
+
+    # 2. Top Metric Cards
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Starting Liquid Reserves", inr(summ["starting_liquid"]), help="Total cash across all 3 bank accounts today")
+    k2.metric("Projected Ending Reserves", inr(summ["ending_liquid"]), delta=f"{'+' if summ['ending_liquid'] >= summ['starting_liquid'] else ''}{inr(summ['ending_liquid'] - summ['starting_liquid'])} net flow", delta_color="normal")
+    k3.metric("Lowest Projected Point", inr(summ["min_total_liquid"]), delta="100% Solvent ✅", delta_color="off", help="Lowest total liquid reserves reached during simulation")
+    k4.metric("Next Major Inflow", f"~{salary_day_val}th Aug/Sep", delta=f"{inr(summ['salary_amount'])} Salary", delta_color="off")
+
+    # 3. Proactive Transfer Recommendations Callout
+    if transfers:
+        for t in transfers:
+            st.info(f"💡 **Recommended Action ({t['date']})**: Transfer **{inr(t['amount'])}** from **{t['from_account'].upper()} ➔ {t['to_account'].upper()}** — *{t['reason']}*")
+
+    # 4. Interactive Balance Trajectory Chart
+    st.subheader("📈 Projected Multi-Bank Balance Trajectory")
+    
+    fig_radar = go.Figure()
+    fig_radar.add_trace(go.Scatter(
+        x=df_sim["day_name"], y=df_sim["axis_balance"],
+        name="Axis Bank (Salary & Operating)",
+        line=dict(color="#a855f7", width=2.5),
+        mode="lines+markers"
+    ))
+    fig_radar.add_trace(go.Scatter(
+        x=df_sim["day_name"], y=df_sim["kotak_total"],
+        name="Kotak 811 (Checking + Smart FD)",
+        line=dict(color="#06b6d4", width=2.5),
+        mode="lines+markers"
+    ))
+    fig_radar.add_trace(go.Scatter(
+        x=df_sim["day_name"], y=df_sim["sbi_balance"],
+        name="State Bank of India",
+        line=dict(color="#f59e0b", width=2),
+        mode="lines"
+    ))
+    fig_radar.add_trace(go.Scatter(
+        x=df_sim["day_name"], y=df_sim["total_liquid"],
+        name="Total Consolidated Liquid Net Worth",
+        line=dict(color="#10b981", width=3.5, dash="dot"),
+        mode="lines"
+    ))
+
+    # Add Safe Zero Baseline
+    fig_radar.add_hline(y=0, line_dash="dash", line_color="#ef4444", annotation_text="Zero Balance Baseline", annotation_position="bottom right")
+
+    fig_radar.update_layout(
+        title=f"Day-by-Day Balance Projection ({summ['start_date']} to {summ['end_date']})",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0)
+    )
+    _layout(fig_radar, height=380)
+    st.plotly_chart(fig_radar, width="stretch")
+
+    # 5. Chronological Payment & Inflow Calendar Grid
+    st.subheader("📅 Chronological Payment & Cashflow Schedule")
+    st.caption("All upcoming salary credits, loan auto-debits, and credit card statement deadlines.")
+
+    if events:
+        ev_rows = []
+        for ev in events:
+            sign = "+" if ev["is_inflow"] else "-"
+            ev_rows.append({
+                "Date": ev["date"],
+                "Account": ev["account"].upper(),
+                "Event / Description": ev["title"],
+                "Category": ev["category"],
+                "Amount": f"{sign}{inr(abs(ev['amount']))}",
+                "Type": "🟢 Inflow" if ev["is_inflow"] else "🔴 Debit"
+            })
+        st.dataframe(pd.DataFrame(ev_rows), width="stretch", hide_index=True)
+    else:
+        st.info("No scheduled events in this window.")
+
+
 def main():
     sidebar()
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
         [
             f"{TAB_ICONS['overview']} Overview",
-            f"{TAB_ICONS['transactions']} Bank Transactions",
+            "⚡ 30-Day Liquidity Radar",
+            f"{TAB_ICONS['reconciliation']} Ashwin Reconciliation",
             "💳 Credit Cards",
             "🏦 Bank Loans",
-            f"{TAB_ICONS['upload']} Upload",
-            f"{TAB_ICONS['reconciliation']} Reconciliation",
+            f"{TAB_ICONS['transactions']} Bank Transactions",
             "🧠 Master Financial AI",
+            f"{TAB_ICONS['upload']} Upload",
             f"{TAB_ICONS['feedback']} Feedback",
         ]
     )
     with tab1:
         tab_overview()
     with tab2:
-        tab_transactions()
+        tab_liquidity_radar()
     with tab3:
-        tab_credit_cards()
-    with tab4:
-        tab_bank_loans()
-    with tab5:
-        tab_upload()
-    with tab6:
         tab_reconciliation()
+    with tab4:
+        tab_credit_cards()
+    with tab5:
+        tab_bank_loans()
+    with tab6:
+        tab_transactions()
     with tab7:
         tab_chat()
     with tab8:
+        tab_upload()
+    with tab9:
         tab_feedback()
 
 

@@ -251,6 +251,13 @@ def main():
     check(journal.lower() == "wal", f"SQLite journal_mode is WAL (got {journal})")
     conn.close()
 
+    print("\nLiquidity Forecast & Simulator Engine:")
+    from finance.forecast import liquidity
+    sim = liquidity.simulate_cashflow(start_date="2026-08-21", horizon_days=30)
+    check("daily_df" in sim, "simulate_cashflow returns daily_df")
+    check(len(sim["daily_df"]) == 31, "simulate_cashflow returns 31 daily projection points")
+    check("recommended_transfers" in sim, "simulate_cashflow computes transfer recommendations")
+
     print(f"\n===== {PASS} passed, {FAIL} failed =====")
     sys.exit(1 if FAIL else 0)
 
