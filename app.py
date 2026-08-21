@@ -264,13 +264,13 @@ def display_categories() -> list[str]:
 def _layout(fig: go.Figure, height: int = 340) -> go.Figure:
     fig.update_layout(
         height=height,
-        margin=dict(l=10, r=10, t=45, b=10),
+        margin=dict(l=15, r=15, t=55, b=25),
         font=dict(family="'Plus Jakarta Sans', -apple-system, sans-serif",
                   color="#94a3b8", size=12),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        title_font=dict(color="#f8fafc", size=15, family="'Plus Jakarta Sans', sans-serif"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(color="#cbd5e1")),
+        title_font=dict(color="#f8fafc", size=14, family="'Plus Jakarta Sans', sans-serif"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.06, x=0, font=dict(color="#cbd5e1", size=11)),
     )
     return fig
 
@@ -1927,19 +1927,22 @@ def tab_liquidity_radar():
 
     # 4. Interactive Balance Trajectory Chart
     st.subheader("📈 Projected Multi-Bank Balance Trajectory")
+    st.caption(f"Day-by-day cashflow simulation across 3 bank accounts ({summ['start_date']} to {summ['end_date']}).")
     
     fig_radar = go.Figure()
     fig_radar.add_trace(go.Scatter(
         x=df_sim["day_name"], y=df_sim["axis_balance"],
         name="Axis Bank (Salary & Operating)",
         line=dict(color="#a855f7", width=2.5),
-        mode="lines+markers"
+        mode="lines+markers",
+        marker=dict(size=5)
     ))
     fig_radar.add_trace(go.Scatter(
         x=df_sim["day_name"], y=df_sim["kotak_total"],
         name="Kotak 811 (Checking + Smart FD)",
         line=dict(color="#06b6d4", width=2.5),
-        mode="lines+markers"
+        mode="lines+markers",
+        marker=dict(size=5)
     ))
     fig_radar.add_trace(go.Scatter(
         x=df_sim["day_name"], y=df_sim["sbi_balance"],
@@ -1955,14 +1958,42 @@ def tab_liquidity_radar():
     ))
 
     # Add Safe Zero Baseline
-    fig_radar.add_hline(y=0, line_dash="dash", line_color="#ef4444", annotation_text="Zero Balance Baseline", annotation_position="bottom right")
+    fig_radar.add_hline(
+        y=0, line_dash="dash", line_color="#ef4444",
+        annotation_text="Zero Balance Baseline",
+        annotation_position="bottom right",
+        annotation_font=dict(color="#ef4444", size=10)
+    )
 
     fig_radar.update_layout(
-        title=f"Day-by-Day Balance Projection ({summ['start_date']} to {summ['end_date']})",
+        height=400,
+        margin=dict(l=20, r=20, t=35, b=45),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0)
+        font=dict(family="'Plus Jakarta Sans', -apple-system, sans-serif", color="#94a3b8", size=12),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.04,
+            x=0,
+            font=dict(color="#cbd5e1", size=11),
+            bgcolor="rgba(0,0,0,0)"
+        )
     )
-    _layout(fig_radar, height=380)
+    fig_radar.update_xaxes(
+        gridcolor="rgba(255,255,255,0.06)",
+        showgrid=True,
+        tickangle=-30,
+        nticks=10,
+        tickfont=dict(size=11, color="#94a3b8")
+    )
+    fig_radar.update_yaxes(
+        gridcolor="rgba(255,255,255,0.06)",
+        zeroline=False,
+        tickprefix="₹",
+        tickfont=dict(size=11, color="#94a3b8")
+    )
     st.plotly_chart(fig_radar, width="stretch")
 
     # 5. Chronological Payment & Inflow Calendar Grid
