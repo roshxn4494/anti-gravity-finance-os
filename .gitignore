@@ -1,0 +1,32 @@
+# Environment & secrets
+.env
+.env.*
+*.env
+
+# Python & virtual environment
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Data & local databases (Keep personal financial records strictly local & private)
+data/*.db*
+data/*.bak
+data/statements/
+data/finance.db
+data/finance.db-wal
+data/finance.db-shm
+
+# OS & IDE metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.idea/
+.vscode/
+.agents/
+.claude/
