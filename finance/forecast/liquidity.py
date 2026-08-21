@@ -25,6 +25,7 @@ def simulate_cashflow(
     include_ashwin: bool = True,
     ashwin_amount: Optional[float] = None,
     ashwin_deposit_day: int = 10,
+    monthly_savings_target: float = 48000.0,
     daily_burn: float = 600.0,
     burn_account: str = "axis",
     min_safe_buffer: float = 2000.0
@@ -85,7 +86,7 @@ def simulate_cashflow(
         events_by_date[d] = []
         d += timedelta(days=1)
 
-    # A. Salary Credits (Monthly ~salary_day, or last day of month if shorter)
+    # A. Salary Credits & Systematic Savings Flow (Axis ➔ SBI ➔ Kotak Smart FD)
     if include_salary:
         d = cur_date
         while d <= end_date:
@@ -94,12 +95,12 @@ def simulate_cashflow(
             if d.day == salary_day:
                 is_sal_day = True
             elif d.day >= 28:
-                # Check if tomorrow is next month
                 next_day = d + timedelta(days=1)
                 if next_day.month != d.month and salary_day > d.day:
                     is_sal_day = True
 
             if is_sal_day and d >= cur_date:
+                # 1. Salary credit into Axis
                 events_by_date[d].append({
                     "type": "salary",
                     "title": "Monthly Net Salary Credit",
@@ -109,6 +110,52 @@ def simulate_cashflow(
                     "is_inflow": True,
                     "category": "Salary"
                 })
+
+                # 2. Systematic Monthly Savings Quarantine: Transfer ₹48,000 from Axis -> SBI
+                if monthly_savings_target > 0:
+                    events_by_date[d].append({
+                        "type": "savings_quarantine",
+                        "title": "Systematic Savings: Axis ➔ SBI",
+                        "description": f"Quarantine ₹{monthly_savings_target:,.0f} savings immediately into SBI vault",
+                        "account": "axis",
+                        "amount": -monthly_savings_target,
+                        "is_inflow": False,
+                        "category": "Investments & Savings"
+                    })
+                    events_by_date[d].append({
+                        "type": "savings_staged",
+                        "title": "Savings Received into SBI Vault",
+                        "description": f"Staging ₹{monthly_savings_target:,.0f} monthly savings in SBI",
+                        "account": "sbi",
+                        "amount": monthly_savings_target,
+                        "is_inflow": True,
+                        "category": "Investments & Savings"
+                    })
+
+                    # 3. Scheduled Move: SBI ➔ Kotak (Sweeps into Active Money Smart FD on 1st of month)
+                    move_to_kotak_day = d + timedelta(days=2) # 1st of next month
+                    if move_to_kotak_day <= end_date:
+                        if move_to_kotak_day not in events_by_date:
+                            events_by_date[move_to_kotak_day] = []
+                        events_by_date[move_to_kotak_day].append({
+                            "type": "savings_sweep",
+                            "title": "SBI ➔ Kotak Smart FD Sweep",
+                            "description": f"Move ₹{monthly_savings_target:,.0f} to Kotak 811 Active Money Smart FD (~7.5% interest)",
+                            "account": "sbi",
+                            "amount": -monthly_savings_target,
+                            "is_inflow": False,
+                            "category": "Investments & Savings"
+                        })
+                        events_by_date[move_to_kotak_day].append({
+                            "type": "savings_compounded",
+                            "title": "Smart FD Active Money Deposit",
+                            "description": f"₹{monthly_savings_target:,.0f} earning ~7.5% in Kotak Smart FD",
+                            "account": "kotak",
+                            "amount": monthly_savings_target,
+                            "is_inflow": True,
+                            "category": "Investments & Savings"
+                        })
+
             d += timedelta(days=1)
 
     # B. Ashwin Expected Settlement Deposits (Into Axis Bank)

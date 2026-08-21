@@ -1886,16 +1886,19 @@ def tab_liquidity_radar():
 
     # 1. Interactive Simulator Controls
     with st.expander("🛠️ Simulator Scenario & Cashflow Controls", expanded=False):
-        c_sc1, c_sc2, c_sc3 = st.columns(3)
+        c_sc1, c_sc2, c_sc3, c_sc4 = st.columns(4)
         with c_sc1:
             horizon = st.slider("Simulation Horizon (Days)", min_value=15, max_value=60, value=30, step=5, key="sim_horizon")
             daily_burn_val = st.slider("Daily Lifestyle Burn (₹/day)", min_value=0, max_value=2000, value=600, step=50, key="sim_burn")
         with c_sc2:
-            inc_ashwin = st.checkbox("Include Ashwin Monthly Deposit", value=True, key="sim_inc_ashwin")
-            ashwin_day = st.slider("Expected Ashwin Deposit Day", min_value=1, max_value=25, value=10, key="sim_ashwin_day")
+            inc_savings = st.checkbox("Systematic Savings Routine", value=True, help="Quarantine savings into SBI, then sweep to Kotak Smart FD", key="sim_inc_savings")
+            savings_target_val = st.number_input("Monthly Savings Target (₹)", value=48000.0, step=2000.0, key="sim_savings_target")
         with c_sc3:
             inc_salary = st.checkbox("Include Monthly Salary Credit", value=True, key="sim_inc_salary")
             salary_day_val = st.slider("Expected Salary Credit Day", min_value=25, max_value=31, value=29, key="sim_salary_day")
+        with c_sc4:
+            inc_ashwin = st.checkbox("Include Ashwin Monthly Deposit", value=True, key="sim_inc_ashwin")
+            ashwin_day = st.slider("Expected Ashwin Deposit Day", min_value=1, max_value=25, value=10, key="sim_ashwin_day")
 
     # Run Simulation
     sim = liquidity.simulate_cashflow(
@@ -1904,6 +1907,7 @@ def tab_liquidity_radar():
         salary_day=salary_day_val,
         include_ashwin=inc_ashwin,
         ashwin_deposit_day=ashwin_day,
+        monthly_savings_target=float(savings_target_val) if inc_savings else 0.0,
         daily_burn=float(daily_burn_val)
     )
 
@@ -1967,7 +1971,7 @@ def tab_liquidity_radar():
 
     fig_radar.update_layout(
         height=400,
-        margin=dict(l=20, r=20, t=35, b=45),
+        margin=dict(l=20, r=20, t=50, b=50),
         hovermode="x unified",
         font=dict(family="'Plus Jakarta Sans', -apple-system, sans-serif", color="#94a3b8", size=12),
         paper_bgcolor="rgba(0,0,0,0)",
@@ -1975,7 +1979,7 @@ def tab_liquidity_radar():
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.04,
+            y=1.06,
             x=0,
             font=dict(color="#cbd5e1", size=11),
             bgcolor="rgba(0,0,0,0)"
