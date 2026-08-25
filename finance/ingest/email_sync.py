@@ -155,20 +155,40 @@ class EmailSyncClient:
 
         self._imap.select(folder, readonly=True)
 
-        since_date = (datetime.now() - timedelta(days=days_back)).strftime("%d-%b-%Y")
-        
-        # IMAP Search for Statement / Bank keywords
-        # Using SINCE filter
-        search_criteria = f'(SINCE "{since_date}")'
-        status, data = self._imap.search(None, search_criteria)
-        if status != "OK" or not data or not data[0]:
+        # Provider-specific targeted card queries for maximum speed & precision
+        if self.provider == "gmail":
+            queries = [
+                'SUBJECT "Scapia Federal"',
+                'SUBJECT "Mayura Credit Card"',
+                'SUBJECT "Edge CSB Bank"',
+            ]
+        elif self.provider == "yahoo":
+            queries = [
+                'SUBJECT "YES_BANK_ELITE"',
+                'SUBJECT "Indianoil Axis Bank"',
+                'SUBJECT "Indian Oil Axis Bank"',
+            ]
+        else:
+            queries = ['SUBJECT "Credit Card Statement"', 'SUBJECT "e-Statement"']
+
+        statement_msg_ids = []
+        for q in queries:
+            try:
+                status, data = self._imap.search(None, q)
+                if status == "OK" and data and data[0]:
+                    ids = data[0].split()
+                    if ids:
+                        # Grab the latest email for this specific card
+                        statement_msg_ids.append(ids[-1])
+            except Exception:
+                continue
+
+        if not statement_msg_ids:
             return []
 
-        mail_ids = data[0].split()
         results: List[Dict[str, Any]] = []
 
-        # Process in reverse (most recent first)
-        for m_id in reversed(mail_ids):
+        for m_id in statement_msg_ids:
             try:
                 status, msg_data = self._imap.fetch(m_id, "(RFC822)")
                 if status != "OK" or not msg_data or not msg_data[0]:
@@ -180,13 +200,6 @@ class EmailSyncClient:
                 sender = _decode_mime_words(msg.get("From", ""))
                 subject = _decode_mime_words(msg.get("Subject", ""))
                 msg_date = msg.get("Date", "")
-
-                # Check if sender matches bank domains or subject matches statement keywords
-                is_bank_sender = any(domain in sender.lower() for domain in BANK_SENDER_DOMAINS)
-                is_statement_subject = bool(re.search(r"statement|e-statement|estatement|bill\s+generated|card\s+bill", subject, re.IGNORECASE))
-
-                if not (is_bank_sender or is_statement_subject):
-                    continue
 
                 card_name = detect_card_from_meta(sender, subject)
 

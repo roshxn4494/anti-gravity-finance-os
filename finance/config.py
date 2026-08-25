@@ -3,6 +3,17 @@
 Rules are simple case-insensitive substring matches against the UPPERCASED
 transaction narration (e.g. "UPI/SWIGGY/.../DR/249").
 """
+import os
+from pathlib import Path
+
+# Load .env file into environment
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ[_k.strip()] = _v.strip().strip("'\"")
 
 # --------------------------------------------------------------------------
 # Your accounts. 'keywords' are how a narration that refers to one of your

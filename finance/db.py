@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+from pathlib import Path
 import re
 import sqlite3
 from datetime import datetime
@@ -16,7 +18,7 @@ import pandas as pd
 
 from . import config
 
-DB_PATH = None  # set from app.py / tests
+DB_PATH = os.getenv("FINANCE_DB_PATH", "data/finance.db")  # set from app.py / tests or default
 
 
 def set_db_path(path: str) -> None:
@@ -25,6 +27,10 @@ def set_db_path(path: str) -> None:
 
 
 def connect() -> sqlite3.Connection:
+    global DB_PATH
+    if DB_PATH is None:
+        DB_PATH = os.getenv("FINANCE_DB_PATH", "data/finance.db")
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
