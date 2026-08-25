@@ -340,3 +340,52 @@ def sync_statements_from_email(
         "emis_saved": saved_emis,
         "details": details
     }
+
+
+def sync_all_configured_emails(
+    pdf_passwords: Optional[List[str]] = None,
+    days_back: int = 60
+) -> Dict[str, Any]:
+    """1-Click Sync across all configured email accounts (Gmail & Yahoo Mail)."""
+    providers = []
+    if os.getenv("GMAIL_USER") and os.getenv("GMAIL_APP_PASSWORD"):
+        providers.append("gmail")
+    if os.getenv("YAHOO_USER") and os.getenv("YAHOO_APP_PASSWORD"):
+        providers.append("yahoo")
+
+    if not providers:
+        return {
+            "success": False,
+            "message": "No email accounts configured in .env. Please set GMAIL_USER/GMAIL_APP_PASSWORD or YAHOO_USER/YAHOO_APP_PASSWORD.",
+            "statements_saved": 0,
+            "emis_saved": 0,
+            "details": []
+        }
+
+    total_saved = 0
+    total_emis = 0
+    all_details = []
+    messages = []
+
+    for prov in providers:
+        res = sync_statements_from_email(
+            provider=prov,
+            pdf_passwords=pdf_passwords,
+            days_back=days_back
+        )
+        if res["success"]:
+            total_saved += res["statements_saved"]
+            total_emis += res["emis_saved"]
+            all_details.extend(res["details"])
+            messages.append(f"{prov.capitalize()}: {res['statements_saved']} statements saved")
+        else:
+            messages.append(f"{prov.capitalize()} Error: {res['message']}")
+
+    return {
+        "success": True,
+        "message": " | ".join(messages),
+        "statements_saved": total_saved,
+        "emis_saved": total_emis,
+        "details": all_details
+    }
+

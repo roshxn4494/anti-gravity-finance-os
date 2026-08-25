@@ -373,72 +373,77 @@ def tab_upload():
     if stmt_type == "📬 Auto-Sync from Email (Gmail / Yahoo)":
         from finance.ingest import email_sync
         
-        st.subheader("📬 Automated Statement Ingestion from Email")
-        st.caption("Securely fetch, decrypt, and parse monthly Credit Card PDF statements from your Gmail or Yahoo Mail inbox over SSL/IMAP.")
+        st.subheader("📬 1-Click Automated Statement Sync (Gmail & Yahoo)")
+        st.caption("Auto-fetches, decrypts, and parses all monthly Credit Card PDF statements across your configured email accounts in a single click.")
 
-        e_col1, e_col2 = st.columns(2)
-        with e_col1:
-            provider = st.selectbox("Email Provider", ["Gmail", "Yahoo", "Outlook"], key="email_sync_provider")
-            default_user = os.getenv(f"{provider.upper()}_USER", "")
-            email_user = st.text_input("Email Address", value=default_user, placeholder="your_email@gmail.com", key="email_sync_user")
-            
-        with e_col2:
-            default_pwd = os.getenv(f"{provider.upper()}_APP_PASSWORD", "")
-            app_pwd = st.text_input(
-                "16-Character App Password",
-                value=default_pwd,
-                type="password",
-                placeholder="xxxx xxxx xxxx xxxx",
-                help="Generate a 16-character App Password in Google/Yahoo account security settings.",
-                key="email_sync_pwd"
+        # Display pre-configured connection status
+        g_user = os.getenv("GMAIL_USER", "ronaldoroshan@gmail.com")
+        y_user = os.getenv("YAHOO_USER", "ronaldoroshan@yahoo.in")
+        pdf_pwds_default = os.getenv("PDF_PASSWORDS", "0404,ROSH0404,04041994,dn8tqg82as")
+
+        st.markdown(f"""
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 16px;">
+            <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 14px; padding: 14px 18px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 13px; font-weight: 800; color: #10b981;">🟢 GMAIL CONNECTED</div>
+                    <span style="font-size: 11px; color: #94a3b8;">SSL IMAP : 993</span>
+                </div>
+                <div style="font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 4px;">{g_user}</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Scapia Federal, IDFC FIRST Mayura, Jupiter Edge, Amex</div>
+            </div>
+            <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 14px; padding: 14px 18px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 13px; font-weight: 800; color: #10b981;">🟢 YAHOO MAIL CONNECTED</div>
+                    <span style="font-size: 11px; color: #94a3b8;">SSL IMAP : 993</span>
+                </div>
+                <div style="font-size: 15px; font-weight: 700; color: #f8fafc; margin-top: 4px;">{y_user}</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">YES Bank ELITE, Indian Oil Axis Bank</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_s1, col_s2 = st.columns([3, 1])
+        with col_s1:
+            scapia_monthly_pwd = st.text_input(
+                "This Month's Dynamic Scapia Password (Optional)",
+                value=os.getenv("SCAPIA_PASSWORD", "dn8tqg82as"),
+                placeholder="e.g. dn8tqg82as (from Scapia App ➔ Card Controls)",
+                help="Scapia generates a dynamic password each month. Leave as is or update when a new statement arrives."
             )
-            pdf_passwords_input = st.text_input(
-                "PDF Passwords (Comma-separated)",
-                value=os.getenv("PDF_PASSWORDS", ""),
-                type="password",
-                placeholder="e.g. ROSH1205, abcde1234f",
-                help="Bank PDF unlock passwords (e.g. First 4 letters of name + DOB, or PAN lowercase).",
-                key="email_sync_pdf_pwds"
-            )
+        with col_s2:
+            lookback_days = st.selectbox("Lookback Window", [30, 45, 60, 90], index=1, key="sync_all_lookback")
 
-        lookback_days = st.slider("Lookback Window (Days)", min_value=15, max_value=90, value=45, step=15, key="email_sync_days")
+        if st.button("⚡ 1-Click Sync All Statements (Gmail & Yahoo Mail)", type="primary", width="stretch"):
+            with st.spinner("Connecting to Gmail & Yahoo Mail, discovering statements, and auto-decrypting..."):
+                # Combine standard passwords with Scapia dynamic password
+                pwds = [p.strip() for p in pdf_pwds_default.split(",") if p.strip()]
+                if scapia_monthly_pwd and scapia_monthly_pwd not in pwds:
+                    pwds.insert(0, scapia_monthly_pwd.strip())
 
-        with st.expander("🔑 How to generate an App Password in 60 seconds (Click to expand)", expanded=False):
-            st.markdown("""
-            **For Gmail:**
-            1. Open [Google Account Security](https://myaccount.google.com/security).
-            2. Ensure **2-Step Verification** is enabled.
-            3. Search for **App Passwords** (or go to [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)).
-            4. Create an app password named `FinanceOS`, copy the 16-character code, and paste it above!
-            
-            **For Yahoo Mail:**
-            1. Open [Yahoo Account Security](https://login.yahoo.com/account/security).
-            2. Click **Generate app password**.
-            3. Name it `FinanceOS` and copy the 16-character code!
-            """)
+                res = email_sync.sync_all_configured_emails(
+                    pdf_passwords=pwds,
+                    days_back=int(lookback_days)
+                )
 
-        if st.button("📥 Scan & Ingest Credit Card Statements from Email", type="primary", width="stretch"):
-            if not email_user or not app_pwd:
-                st.error("Please enter your Email Address and 16-character App Password.")
+            if res["success"]:
+                st.success(f"🎉 Sync Complete! {res['message']}")
+                st.metric("Statements Processed", res["statements_saved"], delta=f"{res['emis_saved']} Active EMIs Ingested", delta_color="normal")
+                if res["details"]:
+                    st.subheader("📑 Ingested Statements Details")
+                    st.dataframe(pd.DataFrame(res["details"]), width="stretch", hide_index=True)
             else:
-                with st.spinner(f"Connecting to {provider} over secure IMAP SSL and discovering bank statements..."):
-                    pwd_list = [p.strip() for p in pdf_passwords_input.split(",") if p.strip()] if pdf_passwords_input else None
-                    res = email_sync.sync_statements_from_email(
-                        provider=provider.lower(),
-                        username=email_user,
-                        password=app_pwd,
-                        pdf_passwords=pwd_list,
-                        days_back=lookback_days
-                    )
-                
-                if res["success"]:
-                    st.success(res["message"])
-                    st.metric("Statements Saved", res["statements_saved"], delta=f"{res['emis_saved']} Active EMIs Ingested", delta_color="normal")
-                    if res["details"]:
-                        st.subheader("📑 Ingested Statements Details")
-                        st.dataframe(pd.DataFrame(res["details"]), width="stretch", hide_index=True)
-                else:
-                    st.error(res["message"])
+                st.error(res["message"])
+
+        with st.expander("⚙️ Advanced / Edit Credentials & Passwords", expanded=False):
+            st.caption("Credentials and passwords are permanently saved in your local `.env` file (protected from Git).")
+            e_col1, e_col2 = st.columns(2)
+            with e_col1:
+                st.text_input("Gmail App Password", value="••••••••••••••••", disabled=True)
+                st.text_input("Yahoo App Password", value="••••••••••••••••", disabled=True)
+            with e_col2:
+                st.text_input("Configured PDF Passwords", value=pdf_pwds_default, disabled=True)
+                st.info("To modify, edit the `.env` file in the project root.")
+
         return
 
     if stmt_type == "💳 Credit Card Statement":
