@@ -411,6 +411,31 @@ def ashwin_monthly_dues_and_settlement(month: str = "") -> str:
     return "\n".join(out)
 
 
+@tool
+def master_sync_email_statements(provider: str = "gmail", days_back: int = 45) -> str:
+    """Connect to Gmail or Yahoo Mail to automatically discover, download, and parse
+    the latest credit card PDF statements and active EMI plans."""
+    from finance.ingest import email_sync
+
+    res = email_sync.sync_statements_from_email(provider=provider, days_back=days_back)
+    if not res["success"]:
+        return f"⚠️ Email Sync Error: {res['message']}"
+
+    out = [
+        f"**📬 Email Statement Sync Results ({provider.capitalize()}):**\n",
+        f"• **Status**: {res['message']}",
+        f"• **Statements Saved**: **{res['statements_saved']}**",
+        f"• **Active EMIs Ingested**: **{res['emis_saved']}**",
+    ]
+
+    if res["details"]:
+        out.append("\n**Statements Processed:**")
+        for d in res["details"]:
+            out.append(f"• **{d['card_name']}** ({d['filename']}): Total Due {_inr(d['total_due'])}, Due Date: {d['due_date']} — {d['status']}")
+
+    return "\n".join(out)
+
+
 MASTER_TOOLS = [
     master_financial_summary,
     master_debt_and_dti_overview,
@@ -418,4 +443,5 @@ MASTER_TOOLS = [
     master_debt_free_roadmap,
     master_liquidity_and_upcoming_outflows,
     master_prepayment_advisor,
+    master_sync_email_statements,
 ] + bank_tools.TOOLS + cc_tools.ALL_CC_TOOLS

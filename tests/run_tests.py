@@ -258,6 +258,13 @@ def main():
     check(len(sim["daily_df"]) == 31, "simulate_cashflow returns 31 daily projection points")
     check("recommended_transfers" in sim, "simulate_cashflow computes transfer recommendations")
 
+    print("\nEmail Statement Ingestion Engine:")
+    from finance.ingest import email_sync
+    card_detected = email_sync.detect_card_from_meta("alerts@axisbank.com", "Axis Bank Credit Card e-Statement")
+    check(card_detected == "Axis Bank Credit Card", f"detect_card_from_meta detects Axis (got {card_detected})")
+    no_creds = email_sync.sync_statements_from_email(provider="gmail", username="", password="")
+    check(not no_creds["success"], "sync_statements_from_email handles missing credentials safely")
+
     print(f"\n===== {PASS} passed, {FAIL} failed =====")
     sys.exit(1 if FAIL else 0)
 

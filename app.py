@@ -366,9 +366,80 @@ def tab_upload():
 
     stmt_type = st.radio(
         "Statement Target",
-        ["🏦 Bank Account Statement", "💳 Credit Card Statement"],
+        ["🏦 Bank Account Statement", "💳 Credit Card Statement", "📬 Auto-Sync from Email (Gmail / Yahoo)"],
         horizontal=True,
     )
+
+    if stmt_type == "📬 Auto-Sync from Email (Gmail / Yahoo)":
+        from finance.ingest import email_sync
+        
+        st.subheader("📬 Automated Statement Ingestion from Email")
+        st.caption("Securely fetch, decrypt, and parse monthly Credit Card PDF statements from your Gmail or Yahoo Mail inbox over SSL/IMAP.")
+
+        e_col1, e_col2 = st.columns(2)
+        with e_col1:
+            provider = st.selectbox("Email Provider", ["Gmail", "Yahoo", "Outlook"], key="email_sync_provider")
+            default_user = os.getenv(f"{provider.upper()}_USER", "")
+            email_user = st.text_input("Email Address", value=default_user, placeholder="your_email@gmail.com", key="email_sync_user")
+            
+        with e_col2:
+            default_pwd = os.getenv(f"{provider.upper()}_APP_PASSWORD", "")
+            app_pwd = st.text_input(
+                "16-Character App Password",
+                value=default_pwd,
+                type="password",
+                placeholder="xxxx xxxx xxxx xxxx",
+                help="Generate a 16-character App Password in Google/Yahoo account security settings.",
+                key="email_sync_pwd"
+            )
+            pdf_passwords_input = st.text_input(
+                "PDF Passwords (Comma-separated)",
+                value=os.getenv("PDF_PASSWORDS", ""),
+                type="password",
+                placeholder="e.g. ROSH1205, abcde1234f",
+                help="Bank PDF unlock passwords (e.g. First 4 letters of name + DOB, or PAN lowercase).",
+                key="email_sync_pdf_pwds"
+            )
+
+        lookback_days = st.slider("Lookback Window (Days)", min_value=15, max_value=90, value=45, step=15, key="email_sync_days")
+
+        with st.expander("🔑 How to generate an App Password in 60 seconds (Click to expand)", expanded=False):
+            st.markdown("""
+            **For Gmail:**
+            1. Open [Google Account Security](https://myaccount.google.com/security).
+            2. Ensure **2-Step Verification** is enabled.
+            3. Search for **App Passwords** (or go to [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)).
+            4. Create an app password named `FinanceOS`, copy the 16-character code, and paste it above!
+            
+            **For Yahoo Mail:**
+            1. Open [Yahoo Account Security](https://login.yahoo.com/account/security).
+            2. Click **Generate app password**.
+            3. Name it `FinanceOS` and copy the 16-character code!
+            """)
+
+        if st.button("📥 Scan & Ingest Credit Card Statements from Email", type="primary", width="stretch"):
+            if not email_user or not app_pwd:
+                st.error("Please enter your Email Address and 16-character App Password.")
+            else:
+                with st.spinner(f"Connecting to {provider} over secure IMAP SSL and discovering bank statements..."):
+                    pwd_list = [p.strip() for p in pdf_passwords_input.split(",") if p.strip()] if pdf_passwords_input else None
+                    res = email_sync.sync_statements_from_email(
+                        provider=provider.lower(),
+                        username=email_user,
+                        password=app_pwd,
+                        pdf_passwords=pwd_list,
+                        days_back=lookback_days
+                    )
+                
+                if res["success"]:
+                    st.success(res["message"])
+                    st.metric("Statements Saved", res["statements_saved"], delta=f"{res['emis_saved']} Active EMIs Ingested", delta_color="normal")
+                    if res["details"]:
+                        st.subheader("📑 Ingested Statements Details")
+                        st.dataframe(pd.DataFrame(res["details"]), width="stretch", hide_index=True)
+                else:
+                    st.error(res["message"])
+        return
 
     if stmt_type == "💳 Credit Card Statement":
         col_c1, col_c2 = st.columns(2)
