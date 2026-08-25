@@ -243,9 +243,11 @@ def simulate_cashflow(
         "American Express": {"day": 26, "due": 21080.75, "account": "axis"}
     }
 
-    # If statements are in DB, use exact card totals
+    # If statements are in DB, use exact card totals (latest statement per card)
     if not cc_stmts.empty:
-        for _, c in cc_stmts.iterrows():
+        # Sort and take latest statement for each card
+        latest_stmts = cc_stmts.sort_values(["statement_date", "id"]).groupby("card_name", as_index=False).last()
+        for _, c in latest_stmts.iterrows():
             c_name = c["card_name"]
             c_due = float(c["total_due"])
             c_due_date = str(c.get("due_date", ""))

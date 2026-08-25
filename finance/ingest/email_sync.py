@@ -37,11 +37,11 @@ BANK_SENDER_DOMAINS = [
 ]
 
 CARD_KEYWORD_PATTERNS = [
-    (r"axis", "Axis Bank Credit Card"),
+    (r"indian\s*oil|axis", "Axis Bank Credit Card"),
     (r"american\s*express|amex", "American Express"),
-    (r"idfc", "IDFC FIRST Credit Card"),
+    (r"mayura|idfc", "IDFC FIRST Credit Card"),
     (r"scapia|federal", "Scapia Federal Credit Card"),
-    (r"yes\s*bank", "YES Bank Credit Card"),
+    (r"yes_bank_elite|yes\s*bank", "YES Bank Credit Card"),
     (r"hdfc", "HDFC Bank Credit Card"),
     (r"sbi\s*card", "SBI Credit Card"),
     (r"icici", "ICICI Bank Credit Card"),
