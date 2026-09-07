@@ -101,8 +101,15 @@ class EmailSyncClient:
         custom_port: int = 993
     ):
         self.provider = provider.lower()
-        self.username = username or os.getenv(f"{self.provider.upper()}_USER") or os.getenv("EMAIL_USER", "")
-        self.password = password or os.getenv(f"{self.provider.upper()}_APP_PASSWORD") or os.getenv("EMAIL_APP_PASSWORD", "")
+        if username is not None:
+            self.username = username
+        else:
+            self.username = os.getenv(f"{self.provider.upper()}_USER") or os.getenv("EMAIL_USER", "")
+
+        if password is not None:
+            self.password = password
+        else:
+            self.password = os.getenv(f"{self.provider.upper()}_APP_PASSWORD") or os.getenv("EMAIL_APP_PASSWORD", "")
         
         # Clean whitespace from app passwords (users often copy with spaces)
         if self.password:

@@ -139,7 +139,11 @@ def parse_cc_pdf(
         statement_info["card_name"] = "American Express"
     elif "SCAPIA" in u_text or "FEDERAL BANK" in u_text:
         statement_info["card_name"] = "Scapia Federal Credit Card"
-    elif "INDIAN OIL AXIS" in u_text or "AXIS BANK" in u_text:
+    elif "INDIANOIL AXIS BANK RUPAY" in u_text or ("RUPAY" in u_text and ("AXIS" in u_text or "INDIANOIL" in u_text)):
+        statement_info["card_name"] = "IndianOil Axis Bank RuPay Card"
+    elif "INDIAN OIL AXIS" in u_text or "INDIANOIL AXIS" in u_text or ("PREMIUM" in u_text and "AXIS" in u_text):
+        statement_info["card_name"] = "Indian Oil Axis Bank Premium Card"
+    elif "AXIS BANK" in u_text or "AXIS" in u_text:
         statement_info["card_name"] = "Axis Bank Credit Card"
     elif "YES BANK" in u_text or "IRIS" in u_text:
         statement_info["card_name"] = "YES Bank Credit Card"
@@ -375,20 +379,52 @@ def _parse_statement_metadata(text: str, layout_text: str, info: dict):
 
     # Axis Bank Credit Card Metadata
     if "AXIS" in text.upper() or "INDIANOIL" in text.upper() or "INDIAN OIL" in text.upper():
-        m_axis_card = re.search(r"Credit Card Number:\s*(?:4386[X\*]+|[X\*]+)(\d{4})", text, re.IGNORECASE)
-        if m_axis_card and not info["card_last4"]:
-            info["card_last4"] = m_axis_card.group(1)
+        if "RUPAY" in text.upper():
+            info["card_name"] = "IndianOil Axis Bank RuPay Card"
+        elif "PREMIUM" in text.upper() or "INDIAN OIL" in text.upper() or "INDIANOIL" in text.upper():
+            info["card_name"] = "Indian Oil Axis Bank Premium Card"
 
-        m_axis_month = re.search(r"Selected Statement Month\s+Credit Limit\s+Opening Balance\s*\n\s*([A-Za-z]{3}\s+\d{4})\s+[₹r]?\s*([\d,]+\.\d{2})\s+[₹r]?\s*([\d,]+\.\d{2})", text, re.IGNORECASE)
-        if m_axis_month:
-            _, cred_lim_str, _ = m_axis_month.groups()
-            info["credit_limit"] = float(cred_lim_str.replace(",", ""))
+        # Card Number e.g. 438628******9788 or 652922******6076
+        m_axis_card = re.search(r"(?:Card No:?\s*|Credit Card Number[^\n]*\n[^\n]*?)(\d{6}[X\*]{4,8}(\d{4}))", text, re.IGNORECASE) or re.search(r"(\d{6}[X\*]{4,8}(\d{4}))", text)
+        if m_axis_card:
+            info["card_last4"] = m_axis_card.group(2)
 
-        m_axis_pay = re.search(r"Total Payment Due\s+Minimum Payment Due\s+Payment Due Date\s*\n\s*[₹r]?\s*([\d,]+\.\d{2})\s+[₹r]?\s*([\d,]+\.\d{2})\s+(\d{1,2}\s+[A-Za-z]{3}\s+'?\d{2,4})", text, re.IGNORECASE)
+        # Payment Summary Table
+        # Headers: Total Payment Due Minimum Payment Due Statement Period Payment Due Date Statement Generation Date
+        # Values: 24,513.12 Dr 23,045.00 Dr 27/07/2026 - 25/08/2026 14/09/2026 25/08/2026
+        m_axis_pay = re.search(
+            r"PAYMENT SUMMARY[\s\S]*?Total Payment Due[^\n]*\n\s*([\d,]+\.\d{2})\s*(?:Dr|Cr)?\s+([\d,]+\.\d{2})\s*(?:Dr|Cr)?\s+\d{2}/\d{2}/\d{4}\s*-\s*\d{2}/\d{2}/\d{4}\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}/\d{2}/\d{4})",
+            text,
+            re.IGNORECASE
+        )
         if m_axis_pay:
-            info["total_due"] = float(m_axis_pay.group(1).replace(",", ""))
-            info["min_due"] = float(m_axis_pay.group(2).replace(",", ""))
-            info["due_date"] = _parse_cc_date(m_axis_pay.group(3))
+            tot, min_due, due_d, stmt_d = m_axis_pay.groups()
+            info["total_due"] = float(tot.replace(",", ""))
+            info["min_due"] = float(min_due.replace(",", ""))
+            p_due = due_d.split("/")
+            info["due_date"] = f"{p_due[2]}-{p_due[1]}-{p_due[0]}"
+            p_stmt = stmt_d.split("/")
+            info["statement_date"] = f"{p_stmt[2]}-{p_stmt[1]}-{p_stmt[0]}"
+        else:
+            # Fallback legacy Axis format
+            m_axis_pay_fb = re.search(r"Total Payment Due\s+Minimum Payment Due\s+Payment Due Date\s*\n\s*[₹r]?\s*([\d,]+\.\d{2})\s+[₹r]?\s*([\d,]+\.\d{2})\s+(\d{1,2}\s+[A-Za-z]{3}\s+'?\d{2,4})", text, re.IGNORECASE)
+            if m_axis_pay_fb:
+                info["total_due"] = float(m_axis_pay_fb.group(1).replace(",", ""))
+                info["min_due"] = float(m_axis_pay_fb.group(2).replace(",", ""))
+                info["due_date"] = _parse_cc_date(m_axis_pay_fb.group(3))
+
+        # Limits Table
+        # Headers: Credit Card Number Credit Limit Available Credit Limit Available Cash Limit
+        # Values: 438628******9788 516,000.00 79,888.03 79,888.03
+        m_axis_lim = re.search(
+            r"Credit Card Number[^\n]*Credit Limit[^\n]*Available Credit Limit[\s\S]*?\d{4,6}[X\*]+\d{4}\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})",
+            text,
+            re.IGNORECASE
+        )
+        if m_axis_lim:
+            cred_lim, avail_lim = m_axis_lim.groups()
+            info["credit_limit"] = float(cred_lim.replace(",", ""))
+            info["available_limit"] = float(avail_lim.replace(",", ""))
 
     # American Express Metadata
     if "AMERICAN EXPRESS" in text.upper() or "AMEX" in text.upper():
@@ -885,3 +921,65 @@ def _extract_active_emis(
                     "remaining_tenure": rem_t,
                     "source_file": source_file,
                 })
+
+    # 6. Axis Bank Active EMI Details (EMI PRINCIPAL & EMI BALANCES section)
+    if "AXIS" in text.upper() or "INDIANOIL" in text.upper() or "INDIAN OIL" in text.upper():
+        # Parse EMI BALANCES lookup table
+        bal_map = {}
+        idx_bal = text.find("EMI BALANCES")
+        if idx_bal != -1:
+            bal_section = text[idx_bal:]
+            for b_line in bal_section.split("\n"):
+                b_line = b_line.strip()
+                m_b = re.match(r"^(.+?)\s+(\d{7,10})\s+([\d,]+\.\d{2})$", b_line)
+                if m_b:
+                    mch, ref_no, bal_str = m_b.groups()
+                    bal_map[ref_no] = {
+                        "merchant": mch.strip(),
+                        "balance": float(bal_str.replace(",", ""))
+                    }
+
+        # Parse transaction lines for EMI PRINCIPAL / INTEREST - X/Y, REF# NNN
+        axis_emi_groups = {}
+        for line in text.split("\n"):
+            m_emi = re.search(r"EMI\s+(PRINCIPAL|INTEREST)\s*-\s*(\d+)/(\d+),\s*REF#?\s*(\d+)", line, re.IGNORECASE)
+            if m_emi:
+                part_type, paid_t, tot_t, ref_no = m_emi.groups()
+                m_amt = re.search(r"([\d,]+\.\d{2})\s*(?:Dr|Cr)?", line[m_emi.end():])
+                amt = float(m_amt.group(1).replace(",", "")) if m_amt else 0.0
+
+                if ref_no not in axis_emi_groups:
+                    axis_emi_groups[ref_no] = {
+                        "paid_t": int(paid_t),
+                        "tot_t": int(tot_t),
+                        "prin": 0.0,
+                        "int": 0.0,
+                    }
+                if part_type.upper() == "PRINCIPAL":
+                    axis_emi_groups[ref_no]["prin"] = amt
+                else:
+                    axis_emi_groups[ref_no]["int"] = amt
+
+        for ref_no, data in axis_emi_groups.items():
+            paid_t, tot_t = data["paid_t"], data["tot_t"]
+            rem_t = max(0, tot_t - paid_t)
+            monthly_emi = round(data["prin"] + data["int"], 2)
+            b_info = bal_map.get(ref_no, {})
+            mch = b_info.get("merchant", f"Axis EMI (Ref #{ref_no})")
+            rem_bal = b_info.get("balance", 0.0)
+            loan_amt = round(monthly_emi * tot_t, 2) if rem_bal == 0 else round(rem_bal + (monthly_emi * paid_t), 2)
+
+            if not any(e["merchant_name"] == mch and e["total_tenure"] == tot_t for e in emis):
+                emis.append({
+                    "card_name": card_name,
+                    "card_last4": card_last4 or "",
+                    "merchant_name": mch,
+                    "loan_amount": loan_amt,
+                    "monthly_emi": monthly_emi,
+                    "total_tenure": tot_t,
+                    "paid_tenure": paid_t,
+                    "remaining_tenure": rem_t,
+                    "remaining_principal": rem_bal,
+                    "source_file": source_file,
+                })
+
