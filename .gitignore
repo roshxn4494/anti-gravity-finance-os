@@ -23,6 +23,8 @@ data/finance.db-shm
 # OS & IDE metadata
 .DS_Store
 .DS_Store?
+*.app
+
 ._*
 .Spotlight-V100
 .Trashes
