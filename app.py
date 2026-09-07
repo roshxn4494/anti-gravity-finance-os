@@ -364,6 +364,70 @@ def tab_upload():
         </div>
         """, unsafe_allow_html=True)
 
+    # --------------------------------------------------------------------------
+    # Account Coverage & Next Upload Date Intelligence
+    # --------------------------------------------------------------------------
+    all_db_txns = db.load_all()
+    all_cc_stmts = db.load_cc_statements()
+
+    bank_coverage = {}
+    for acct_key in config.ACCOUNT_ORDER:
+        sub_df = all_db_txns[all_db_txns["account"] == acct_key]
+        if not sub_df.empty:
+            d_min = str(sub_df["txn_date"].min())
+            d_max = str(sub_df["txn_date"].max())
+            try:
+                next_start = (pd.to_datetime(d_max) + timedelta(days=1)).strftime("%Y-%m-%d")
+            except Exception:
+                next_start = d_max
+            bank_coverage[acct_key] = {
+                "label": config.ACCOUNTS[acct_key]["label"],
+                "min": d_min,
+                "max": d_max,
+                "next": next_start,
+                "count": len(sub_df)
+            }
+        else:
+            bank_coverage[acct_key] = {
+                "label": config.ACCOUNTS[acct_key]["label"],
+                "min": "—",
+                "max": "No data yet",
+                "next": "Any date",
+                "count": 0
+            }
+
+    st.markdown("""
+    <div style="margin-top: 6px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 14px; font-weight: 800; color: #f8fafc; text-transform: uppercase; letter-spacing: 0.5px;">
+                📅 Current Data Coverage & Next Export Windows
+            </div>
+            <div style="font-size: 12px; color: #94a3b8;">Know exactly which dates to download from NetBanking before uploading</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    cov_cols = st.columns(len(config.ACCOUNT_ORDER))
+    for idx, acct_key in enumerate(config.ACCOUNT_ORDER):
+        c_info = bank_coverage[acct_key]
+        with cov_cols[idx]:
+            st.markdown(f"""
+            <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 14px 16px; min-height: 110px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 14px; font-weight: 800; color: #f8fafc;">🏦 {c_info['label']} Bank</div>
+                    <span style="font-size: 11px; background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 2px 7px; border-radius: 10px; font-weight: 700;">{c_info['count']} txns</span>
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
+                    Ledger available through: <strong style="color: #38bdf8;">{c_info['max']}</strong>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; padding: 5px 8px; color: #34d399;">
+                    👉 Next export: <strong>{c_info['next']}</strong> onwards
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.write("")
+
     stmt_type = st.radio(
         "Statement Target",
         ["🏦 Bank Account Statement", "💳 Credit Card Statement", "📬 Auto-Sync from Email (Gmail / Yahoo)"],
@@ -452,13 +516,14 @@ def tab_upload():
             card_name = st.selectbox(
                 "Card / Bank Name",
                 [
-                    "HDFC Credit Card",
-                    "ICICI Amazon Pay / Credit Card",
-                    "Axis Bank Credit Card",
+                    "Indian Oil Axis Bank Premium Card",
+                    "IndianOil Axis Bank RuPay Card",
                     "American Express",
                     "Scapia Federal Credit Card",
                     "YES Bank Credit Card",
                     "IDFC FIRST Credit Card",
+                    "HDFC Credit Card",
+                    "ICICI Amazon Pay / Credit Card",
                     "SBI Credit Card",
                     "Kotak Credit Card",
                     "IndusInd Credit Card",
@@ -474,6 +539,18 @@ def tab_upload():
                 type="password",
                 help="If your bank PDF is password protected (e.g. DOB + Name or Card Last 4 Digits), enter it here."
             )
+
+        # Show existing statement status for selected card
+        if not all_cc_stmts.empty:
+            c_search = card_name.replace(" Credit Card", "").replace(" Card", "")
+            match_stmt = all_cc_stmts[all_cc_stmts["card_name"].str.contains(c_search[:10], case=False, na=False)]
+            if not match_stmt.empty:
+                l_s = match_stmt.sort_values("statement_date").iloc[-1]
+                st.markdown(f"""
+                <div style="background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: #bae6fd;">
+                    📑 <strong>Latest statement on file:</strong> {l_s['statement_date']} (Payment Due: <strong style="color: #f8fafc;">{l_s['due_date']}</strong>, Total Due: <strong style="color: #f8fafc;">₹{l_s['total_due']:,.2f}</strong>).
+                </div>
+                """, unsafe_allow_html=True)
 
         uploaded = st.file_uploader(
             "Credit Card Statement File",
@@ -527,6 +604,17 @@ def tab_upload():
         return
 
     # Bank Account Statement Upload Flow
+    st.markdown("""
+    <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;">
+        <div style="font-size: 13px; color: #cbd5e1;">
+            💡 <strong>Next Export Windows for NetBanking:</strong>
+            <span style="margin-left: 10px;">🔵 <strong>Axis:</strong> from <code>2026-09-07</code> to Today</span>
+            <span style="margin-left: 14px;">🟣 <strong>Kotak 811:</strong> from <code>2026-08-21</code> to Today</span>
+            <span style="margin-left: 14px;">🟢 <strong>SBI:</strong> from <code>2026-07-31</code> to Today</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     uploaded = st.file_uploader(
         "Statement file",
         type=["csv", "pdf"],
