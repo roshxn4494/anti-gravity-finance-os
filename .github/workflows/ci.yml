@@ -21,8 +21,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest ruff
-      - name: Lint hardened modules
-        run: |
-          ruff check             finance/config.py             finance/domain             finance/hardening.py             finance/metrics.py             finance/security.py             finance/agent/master_graph.py             finance/agent/master_tools.py             tests/test_hardening.py
+      - name: Focused static checks
+        run: >
+          ruff check --select F,E4,E7,E9
+          finance/config.py
+          finance/domain
+          finance/hardening.py
+          finance/metrics.py
+          finance/security.py
+          finance/agent/master_graph.py
+          finance/agent/master_tools.py
+          tests/test_hardening.py
       - name: Tests
         run: pytest -q
