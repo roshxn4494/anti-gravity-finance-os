@@ -12,13 +12,16 @@ __pycache__/
 *$py.class
 *.so
 
-# Data & local databases (Keep personal financial records strictly local & private)
+# Local financial data — never commit user records or profile
 data/*.db*
 data/*.bak
 data/statements/
 data/finance.db
 data/finance.db-wal
 data/finance.db-shm
+data/profile.json
+data/exports/
+data/reports/
 
 # OS & IDE metadata
 .DS_Store

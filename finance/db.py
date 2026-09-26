@@ -15,6 +15,7 @@ from datetime import datetime
 import pandas as pd
 
 from . import config
+from .hardening import init_hardening
 
 DB_PATH = None  # set from app.py / tests
 
@@ -182,6 +183,7 @@ def init_db() -> None:
             pass
 
     conn.executescript(SCHEMA)
+    init_hardening(conn)
 
     try:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_loan_borrower ON bank_loans(borrower);")

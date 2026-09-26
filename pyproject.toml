@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anti-gravity-finance-os"
+version = "0.2.0"
+description = "Privacy-first personal finance operating system"
+requires-python = ">=3.11"
+dependencies = [
+  "streamlit>=1.40",
+  "pandas>=2.0",
+  "pdfplumber>=0.11",
+  "plotly>=5.20",
+  "langchain>=0.3",
+  "langchain-groq>=0.3",
+  "langchain-openai>=0.3",
+  "langgraph>=0.2",
+  "python-dateutil>=2.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

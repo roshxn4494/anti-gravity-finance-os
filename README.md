@@ -88,3 +88,24 @@ machine. Nothing is sent anywhere.
 
 Covers classification, transfer/CC matching, recurring detection, KPI math and
 dedup, using synthetic statements for all three banks.
+
+
+## Architecture & security model
+
+Finance OS now separates deterministic financial computation from AI interaction.
+
+- **Personal configuration is local-only:** account-specific names, counterparties and employer keywords belong in `data/profile.json`, which is git-ignored. Copy `config/profile.example.json` to start.
+- **Exact monetary arithmetic:** new domain calculations use integer minor units/Decimal rather than binary floating point.
+- **Provenance and review:** the database initializes `import_runs`, `transaction_provenance`, `audit_events`, `review_queue`, `classification_rules`, and `metric_snapshots`.
+- **AI is not the source of financial truth:** agent prompts contain behavioral rules only; financial facts must come from deterministic tools and current database state.
+- **Cloud AI is opt-in:** set `FINANCE_PRIVACY_MODE=cloud_ai` explicitly before sending financial context to a cloud model. The default is local/blocked.
+- **No unsupported prepayment claims:** the debt optimizer only uses stored loan/card data and reports missing APR/fee/foreclosure inputs instead of hard-coded savings assumptions.
+- **CI:** GitHub Actions runs Ruff and pytest on pushes and pull requests.
+
+### Local profile
+
+Create `data/profile.json` from `config/profile.example.json` and add only the identifiers and classification rules required for your own statements. Never commit the resulting file.
+
+### Privacy boundary
+
+When cloud AI is enabled, only the data required by the selected agent/tool flow should be sent to the configured provider. For a strict local-only deployment, keep `FINANCE_PRIVACY_MODE=local` and do not configure a cloud API key.

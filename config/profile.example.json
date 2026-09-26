@@ -1,0 +1,28 @@
+{
+  "accounts": {
+    "axis": {"label": "Axis", "keywords": ["AXIS", "AXBK", "UTIB"]},
+    "sbi": {"label": "SBI", "keywords": ["SBI", "SBIN", "STATE BANK"]},
+    "kotak": {"label": "Kotak", "keywords": ["KOTAK", "KKBK"]}
+  },
+  "account_order": ["axis", "sbi", "kotak"],
+  "salary_keywords": ["SALARY", "PAYROLL", "INCOMEPAY", "WAGES", "CTC"],
+  "friend_keywords": [],
+  "friend_upi": [],
+  "own_name_keywords": [],
+  "category_keywords": {
+    "Rent": ["RENT", "LANDLORD", "HOUSE RENT", "FLAT"],
+    "Family & Support": ["MOTHER", "PARENTS", "FAMILY"],
+    "Partner": [],
+    "Loans & EMIs": ["EMI", "LOAN", "NBFC"],
+    "Healthcare": ["APOLLO", "PHARMEASY", "PRACTO", "MEDICINE", "PHARMACY", "HOSPITAL"],
+    "Food & Dining": ["SWIGGY", "ZOMATO", "DOMINOS", "PIZZA", "RESTAURANT", "CAFE"],
+    "Groceries": ["BIGBASKET", "BLINKIT", "DMART", "GROCERY", "VEGETABLE", "SUPERMARKET"],
+    "Transport & Fuel": ["UBER", "RAPIDO", "OLA", "IRCTC", "RAILWAY", "METRO", "PETROL", "FUEL", "TOLL"],
+    "Entertainment": ["BOOKMYSHOW", "NETFLIX", "PRIME VIDEO", "SPOTIFY", "PVR", "CINEMA"],
+    "Shopping": ["AMAZON", "FLIPKART", "MYNTRA", "MEESHO", "AJIO", "SHOP", "STORE", "ELECTRONICS"],
+    "Utilities & Bills": ["ELECTRICITY", "WATER", "GAS", "LPG", "AIRTEL", "VODAFONE", "BSNL", "RECHARGE", "BROADBAND", "WIFI", "DTH", "BBPS"],
+    "Travel": ["MAKEMYTRIP", "YATRA", "GOIBIBO", "CLEARTRIP", "FLIGHT", "AIRLINE", "OYO", "AIRBNB", "TRAVEL"],
+    "Investments": ["SIP", "MUTUAL FUND", "LIC", "POLICY", "ZERODHA", "GROWW", "UPSTOX", "NPS", "FIXED DEPOSIT", "SWP"],
+    "Fees & Charges": ["SERVICE CHARGE", "MAINTENANCE", "PENALTY", "CHARGES", "ATM", "DEBIT CARD", "GST", "COMMISSION"]
+  }
+}
