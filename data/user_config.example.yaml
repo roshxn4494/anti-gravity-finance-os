@@ -1,0 +1,13 @@
+# Example Template: Copy this to data/user_config.yaml for your private configuration.
+# data/user_config.yaml is gitignored.
+
+own_name_keywords:
+  - "YOUR_NAME"
+
+personal_categories:
+  Rent:
+    - "LANDLORD_NAME"
+  Family & Support:
+    - "FAMILY_MEMBER_NAME"
+  Partner:
+    - "PARTNER_NAME"

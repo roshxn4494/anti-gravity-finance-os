@@ -53,14 +53,47 @@ def is_p2p(description: str, counterparty: str) -> bool:
     return False
 
 
+def _matches_keyword(text: str, kw: str, tokens: set[str]) -> bool:
+    """Matches keyword against text using word-boundary or token semantics."""
+    kw_clean = kw.strip().upper()
+    if not kw_clean:
+        return False
+    if " " in kw_clean:
+        pattern = r"\b" + re.escape(kw_clean) + r"\b"
+        return bool(re.search(pattern, text))
+    else:
+        if kw_clean in tokens:
+            return True
+        pattern = r"(?:^|[^A-Z0-9])" + re.escape(kw_clean) + r"(?:$|[^A-Z0-9])"
+        return bool(re.search(pattern, text))
+
+
 def categorize(description: str) -> str | None:
-    """Return the category for a spend narration, or None if unmatched."""
+    """Return the category for a spend narration, or None if unmatched.
+
+    Scores by longest matching keyword so specific merchants (e.g. 'AMAZON PRIME',
+    'BURGER KING', 'HOUSE RENT') take precedence over shorter generic words ('AMAZON', 'RENT').
+    """
     up = (description or "").upper()
+    if not up:
+        return None
+    tokens = set(re.findall(r"[A-Z0-9]+", up))
+
+    best_cat: str | None = None
+    best_len: int = 0
+
     for category, keywords in config.CATEGORY_KEYWORDS.items():
         for kw in keywords:
-            if kw in up:
-                return category
-    return None
+            kw_clean = kw.strip().upper()
+            if not kw_clean:
+                continue
+            if _matches_keyword(up, kw_clean, tokens):
+                kw_len = len(kw_clean)
+                if kw_len > best_len:
+                    best_len = kw_len
+                    best_cat = category
+
+    return best_cat
 
 
 def all_categories() -> list[str]:

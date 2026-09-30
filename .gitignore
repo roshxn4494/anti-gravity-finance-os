@@ -19,6 +19,10 @@ data/statements/
 data/finance.db
 data/finance.db-wal
 data/finance.db-shm
+data/user_config.yaml
+data/profile.json
+data/profile*.json
+config/profile.json
 
 # OS & IDE metadata
 .DS_Store

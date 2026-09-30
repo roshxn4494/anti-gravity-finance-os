@@ -19,9 +19,27 @@ from .. import config
 from . import categories
 
 
+import re
+
+
 def _has_any(text: str, keywords: list[str]) -> bool:
     t_upper = (text or "").upper()
-    return any(str(kw).upper() in t_upper for kw in keywords)
+    tokens = set(re.findall(r"[A-Z0-9]+", t_upper))
+    for kw in keywords:
+        kw_clean = str(kw).strip().upper()
+        if not kw_clean:
+            continue
+        if " " in kw_clean:
+            pattern = r"\b" + re.escape(kw_clean) + r"\b"
+            if re.search(pattern, t_upper):
+                return True
+        else:
+            if kw_clean in tokens:
+                return True
+            pattern = r"(?:^|[^A-Z0-9])" + re.escape(kw_clean) + r"(?:$|[^A-Z0-9])"
+            if re.search(pattern, t_upper):
+                return True
+    return False
 
 
 def _has_own_other_account(text: str, current_account: str) -> bool:
@@ -70,34 +88,26 @@ def classify_txn(txn: dict, overrides: dict | None = None) -> None:
     is_credit = amount > 0
     is_debit = amount < 0
 
-    # 0. Saved manual override wins (keyed by counterparty).
+    # 1. Salary income (Protected from counterparty overrides)
+    if is_credit and _has_any(desc, config.SALARY_KEYWORDS):
+        txn["classification"] = config.CLASSIFICATION_INCOME
+        txn["category"] = "Salary"
+        return
+
+    # 2. Ashwin's deposits (Protected from counterparty overrides)
+    friend_hit = _has_any(desc, config.FRIEND_KEYWORDS) or cp in config.FRIEND_UPI
+    if is_credit and friend_hit:
+        txn["classification"] = config.CLASSIFICATION_FRIEND_DEPOSIT
+        txn["category"] = "Ashwin"
+        return
+
+    # 3. Saved manual override wins for merchant/spend counterparties
     if cp:
         ov = overrides.get(f"counterparty:{cp}")
         if ov:
             txn["classification"] = ov["classification"]
             txn["category"] = ov["category"]
             return
-
-    fee_kws = config.CATEGORY_KEYWORDS.get("Fees & Charges", [])
-
-    # 1. Fees & charges
-    if is_debit and _has_any(desc, fee_kws):
-        txn["classification"] = config.CLASSIFICATION_FEE
-        txn["category"] = "Fees & Charges"
-        return
-
-    # 2. Salary income
-    if is_credit and _has_any(desc, config.SALARY_KEYWORDS):
-        txn["classification"] = config.CLASSIFICATION_INCOME
-        txn["category"] = "Salary"
-        return
-
-    # 3. Ashwin's deposits
-    friend_hit = _has_any(desc, config.FRIEND_KEYWORDS) or cp in config.FRIEND_UPI
-    if is_credit and friend_hit:
-        txn["classification"] = config.CLASSIFICATION_FRIEND_DEPOSIT
-        txn["category"] = "Ashwin"
-        return
 
     # 4. Credit-card bill payments
     if is_debit and _has_any(desc, config.CC_PAYMENT_KEYWORDS):
@@ -111,17 +121,25 @@ def classify_txn(txn: dict, overrides: dict | None = None) -> None:
         txn["category"] = "Internal Transfer"
         return
 
-    # 6. Investments (SIPs / fund purchases) — money that stays the user's, so
-    #    excluded from spend to keep the dashboard reflecting real consumption.
+    # 6. Investments (SIPs / fund purchases / securities)
+    # Evaluated BEFORE Fees & Charges so GST-bearing SIPs stay classified as Investments.
     if is_debit and _has_any(desc, config.INVESTMENT_KEYWORDS):
         txn["classification"] = config.CLASSIFICATION_INVESTMENT
         txn["category"] = "Investments"
         return
 
-    # 7. Spend
+    # 7. Fees & charges
+    fee_kws = config.CATEGORY_KEYWORDS.get("Fees & Charges", [])
+    if is_debit and _has_any(desc, fee_kws):
+        txn["classification"] = config.CLASSIFICATION_FEE
+        txn["category"] = "Fees & Charges"
+        return
+
+    # 8. Spend
     if is_debit:
         txn["classification"] = config.CLASSIFICATION_SPEND
         cat = categories.categorize(desc)
+        txn["category"] = cat or config.DEFAULT_CATEGORY
         txn["category"] = cat or config.DEFAULT_CATEGORY
         if categories.is_p2p(desc, cp):
             txn["flags"] = _add_flag(txn.get("flags"), "p2p")

@@ -139,11 +139,7 @@ def parse_cc_pdf(
         statement_info["card_name"] = "American Express"
     elif "SCAPIA" in u_text or "FEDERAL BANK" in u_text:
         statement_info["card_name"] = "Scapia Federal Credit Card"
-    elif "INDIANOIL AXIS BANK RUPAY" in u_text or ("RUPAY" in u_text and ("AXIS" in u_text or "INDIANOIL" in u_text)):
-        statement_info["card_name"] = "IndianOil Axis Bank RuPay Card"
-    elif "INDIAN OIL AXIS" in u_text or "INDIANOIL AXIS" in u_text or ("PREMIUM" in u_text and "AXIS" in u_text):
-        statement_info["card_name"] = "Indian Oil Axis Bank Premium Card"
-    elif "AXIS BANK" in u_text or "AXIS" in u_text:
+    elif "AXIS" in u_text or "INDIANOIL" in u_text or "INDIAN OIL" in u_text:
         statement_info["card_name"] = "Axis Bank Credit Card"
     elif "YES BANK" in u_text or "IRIS" in u_text:
         statement_info["card_name"] = "YES Bank Credit Card"
@@ -379,10 +375,7 @@ def _parse_statement_metadata(text: str, layout_text: str, info: dict):
 
     # Axis Bank Credit Card Metadata
     if "AXIS" in text.upper() or "INDIANOIL" in text.upper() or "INDIAN OIL" in text.upper():
-        if "RUPAY" in text.upper():
-            info["card_name"] = "IndianOil Axis Bank RuPay Card"
-        elif "PREMIUM" in text.upper() or "INDIAN OIL" in text.upper() or "INDIANOIL" in text.upper():
-            info["card_name"] = "Indian Oil Axis Bank Premium Card"
+        info["card_name"] = "Axis Bank Credit Card"
 
         # Card Number e.g. 438628******9788 or 652922******6076
         m_axis_card = re.search(r"(?:Card No:?\s*|Credit Card Number[^\n]*\n[^\n]*?)(\d{6}[X\*]{4,8}(\d{4}))", text, re.IGNORECASE) or re.search(r"(\d{6}[X\*]{4,8}(\d{4}))", text)

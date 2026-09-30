@@ -63,7 +63,7 @@ def _get_api_configs() -> list[dict]:
 
     nim_key = os.environ.get("NVIDIA_NIM_API_KEY")
     nim_url = os.environ.get("NVIDIA_NIM_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "meta/llama-3.1-70b-instruct"
+    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "nvidia/llama-3.1-nemotron-70b-instruct"
     if nim_key:
         configs.append({
             "provider": "nvidia_nim",
@@ -112,7 +112,7 @@ class _FallbackModel:
         for cfg in configs:
             if cfg["provider"] == "groq":
                 self._models.append(
-                    ChatGroq(model=cfg["model_name"], api_key=cfg["api_key"], temperature=0).bind_tools(ALL_CC_TOOLS)
+                    ChatGroq(model=cfg["model_name"], api_key=cfg["api_key"], temperature=0, max_tokens=3000).bind_tools(ALL_CC_TOOLS)
                 )
             elif cfg["provider"] == "nvidia_nim":
                 self._models.append(
@@ -121,6 +121,7 @@ class _FallbackModel:
                         api_key=cfg["api_key"],
                         base_url=cfg.get("base_url", "https://integrate.api.nvidia.com/v1"),
                         temperature=0,
+                        max_tokens=3000,
                     ).bind_tools(ALL_CC_TOOLS)
                 )
             else:

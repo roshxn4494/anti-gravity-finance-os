@@ -70,6 +70,11 @@ class TestAgentTools(unittest.TestCase):
         res_3m = tools.spend_total.invoke({"month": "last_3_months"})
         self.assertIn("Real spend", res_3m)
 
+    def test_monthly_obligations_checklist(self):
+        res = tools.monthly_obligations_checklist.invoke({"month": "2026-06"})
+        self.assertIn("Monthly Obligations & Bills Checklist", res)
+        self.assertIn("House Rent", res)
+
 
 if __name__ == "__main__":
     unittest.main()

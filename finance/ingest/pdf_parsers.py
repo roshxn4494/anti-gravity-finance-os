@@ -11,6 +11,7 @@ lists below are the levers.
 from __future__ import annotations
 
 import io
+import os
 import re
 
 import pdfplumber
@@ -70,11 +71,76 @@ def _map_columns(header: list) -> dict:
             "balance": bal_col, "narr": narr_cols}
 
 
-def parse_pdf(data: bytes, source_file: str, account: str) -> tuple[list[dict], list[str]]:
+def detect_pdf_account(data: bytes, password: str | None = None) -> str | None:
+    """Scan first page of PDF statement to auto-detect bank ('axis', 'sbi', 'kotak')."""
+    passwords = [password] if password else [None]
+    env_pwds = os.getenv("PDF_PASSWORDS", "")
+    if env_pwds:
+        for p in env_pwds.split(","):
+            p_clean = p.strip()
+            if p_clean and p_clean not in passwords:
+                passwords.append(p_clean)
+
+    for pwd in passwords:
+        try:
+            open_kwargs = {"password": pwd} if pwd else {}
+            with pdfplumber.open(io.BytesIO(data), **open_kwargs) as pdf:
+                if not pdf.pages:
+                    return None
+                text = (pdf.pages[0].extract_text() or "").upper()
+                if "AXIS BANK" in text or "UTIB" in text or "AXISBANK" in text:
+                    return "axis"
+                if "STATE BANK OF INDIA" in text or "SBIN" in text or "SBI" in text:
+                    return "sbi"
+                if "KOTAK MAHINDRA" in text or "KKBK" in text or "811" in text or "KOTAK" in text:
+                    return "kotak"
+                return None
+        except Exception:
+            continue
+    return None
+
+
+def parse_pdf(data: bytes, source_file: str, account: str, password: str | None = None) -> tuple[list[dict], list[str]]:
     warnings: list[str] = []
     rows: list[dict] = []
+
+    # Candidate passwords to try
+    candidate_passwords: list[str | None] = [password] if password else [None]
+    env_pwds = os.getenv("PDF_PASSWORDS", "")
+    if env_pwds:
+        for p in env_pwds.split(","):
+            p_clean = p.strip()
+            if p_clean and p_clean not in candidate_passwords:
+                candidate_passwords.append(p_clean)
+
+    opened_pdf = None
+    last_exc = None
+    for pwd in candidate_passwords:
+        try:
+            open_kwargs = {"password": pwd} if pwd else {}
+            pdf = pdfplumber.open(io.BytesIO(data), **open_kwargs)
+            # Test access to first page to verify decrypt succeeded
+            if pdf.pages:
+                _ = pdf.pages[0].extract_text()
+            opened_pdf = pdf
+            break
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    if opened_pdf is None:
+        err_msg = str(last_exc).lower() if last_exc else ""
+        if "password" in err_msg or "encrypted" in err_msg or "pdfpasswordincorrect" in err_msg:
+            raise ValueError(
+                f"PDF '{source_file}' is password protected. Please enter the statement password."
+            )
+        raise ValueError(
+            f"Could not read PDF '{source_file}': {last_exc}. If it is a bank "
+            "statement, try downloading the CSV export instead."
+        )
+
     try:
-        with pdfplumber.open(io.BytesIO(data)) as pdf:
+        with opened_pdf as pdf:
             for page in pdf.pages:
                 for table in page.extract_tables():
                     header_idx = _find_header(table)
@@ -87,10 +153,8 @@ def parse_pdf(data: bytes, source_file: str, account: str) -> tuple[list[dict], 
                         txn = _row_to_txn(row, cols, account, source_file)
                         if txn:
                             rows.append(txn)
-    except Exception as exc:  # pdfplumber raises a lot of layout-specific errors
-        raise ValueError(
-            f"Could not read PDF '{source_file}': {exc}. If it is a bank "
-            "statement, try downloading the CSV export instead.") from exc
+    except Exception as exc:
+        raise ValueError(f"Error parsing tables in PDF '{source_file}': {exc}") from exc
 
     if not rows:
         warnings.append(

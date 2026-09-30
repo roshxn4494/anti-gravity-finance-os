@@ -28,9 +28,13 @@ def simulate_cashflow(
     monthly_savings_target: float = 48000.0,
     daily_burn: float = 600.0,
     burn_account: str = "axis",
-    min_safe_buffer: float = 2000.0
+    min_safe_buffer: float = 2000.0,
+    custom_expenses: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """Run a day-by-day cashflow simulation over horizon_days."""
+    """Run a day-by-day cashflow simulation over horizon_days.
+    
+    Supports what-if simulation via custom_expenses (e.g. planned travel, large purchases).
+    """
     if start_date is None:
         cur_date = date.today()
     elif isinstance(start_date, str):
@@ -43,8 +47,8 @@ def simulate_cashflow(
     
     # Defaults if not populated
     bal_axis = 1208.21
-    bal_kotak_sav = 43555.72
-    bal_kotak_fd = 295417.42
+    bal_kotak_sav = 41609.61
+    bal_kotak_fd = 344390.39
     bal_sbi = 49857.96
 
     if not b_df.empty:
@@ -280,6 +284,27 @@ def simulate_cashflow(
                         "category": "Credit Card"
                     })
                 d += timedelta(days=1)
+
+    # E. Custom What-If Discretionary Expenses
+    if custom_expenses:
+        for exp in custom_expenses:
+            exp_date_raw = exp.get("date")
+            if not exp_date_raw:
+                continue
+            exp_date = date.fromisoformat(str(exp_date_raw)) if isinstance(exp_date_raw, str) else exp_date_raw
+            if cur_date <= exp_date <= end_date:
+                if exp_date not in events_by_date:
+                    events_by_date[exp_date] = []
+                exp_amt = abs(float(exp.get("amount", 0.0)))
+                events_by_date[exp_date].append({
+                    "type": "what_if_expense",
+                    "title": exp.get("title", "Planned One-Off Expense"),
+                    "description": exp.get("description", "What-if simulation expense"),
+                    "account": exp.get("account", "axis"),
+                    "amount": -exp_amt,
+                    "is_inflow": False,
+                    "category": exp.get("category", "Discretionary / What-If")
+                })
 
     # 5. Execute Day-by-Day Simulation
     daily_records = []

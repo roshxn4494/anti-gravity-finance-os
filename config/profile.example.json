@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Example User Profile Template for Finance OS. Copy to data/profile.json for your private configuration (gitignored).",
+  "user_name": "User",
+  "privacy_mode": "minimized",
+  "own_name_keywords": [
+    "YOUR_NAME"
+  ],
+  "salary_keywords": [
+    "SALARY",
+    "PAYROLL",
+    "INCOMEPAY",
+    "WAGES",
+    "CTC",
+    "NPS CREDIT",
+    "YOUR_EMPLOYER"
+  ],
+  "pass_through": {
+    "name": "FRIEND_OR_PARTNER",
+    "keywords": [
+      "FRIEND_NAME",
+      "PARTNER_NAME"
+    ],
+    "upi_vpas": [
+      "friend@upi"
+    ]
+  },
+  "accounts": {
+    "axis": {
+      "label": "Axis",
+      "keywords": ["AXIS", "AXBK", "UTIB"],
+      "last_four": "9788"
+    },
+    "sbi": {
+      "label": "SBI",
+      "keywords": ["SBI", "SBIN", "STATE BANK"],
+      "last_four": "1234"
+    },
+    "kotak": {
+      "label": "Kotak",
+      "keywords": ["KOTAK", "KKBK"],
+      "last_four": "5678"
+    }
+  },
+  "personal_categories": {
+    "Rent": [
+      "LANDLORD_NAME"
+    ],
+    "Family & Support": [
+      "FAMILY_MEMBER_NAME"
+    ],
+    "Partner": [
+      "PARTNER_NAME"
+    ]
+  },
+  "custom_rules": []
+}

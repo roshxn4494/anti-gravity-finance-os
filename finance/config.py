@@ -15,52 +15,28 @@ if _env_path.exists():
             _k, _v = _line.split("=", 1)
             os.environ[_k.strip()] = _v.strip().strip("'\"")
 
+from . import profile
+
 # --------------------------------------------------------------------------
-# Your accounts. 'keywords' are how a narration that refers to one of your
+# Your accounts loaded from profile. 'keywords' are how a narration that refers to one of your
 # other own-accounts gets recognised (used for internal-transfer detection).
 # --------------------------------------------------------------------------
-ACCOUNTS = {
-    "axis": {
-        "label": "Axis",
-        "keywords": ["AXIS", "AXBK", "UTIB"],
-    },
-    "sbi": {
-        "label": "SBI",
-        "keywords": ["SBI", "SBIN", "STATE BANK"],
-    },
-    "kotak": {
-        "label": "Kotak",
-        "keywords": ["KOTAK", "KKBK"],
-    },
-}
+ACCOUNTS = profile.get_account_configs()
 
 # Display order of accounts in dropdowns / charts.
-ACCOUNT_ORDER = ["axis", "sbi", "kotak"]
+ACCOUNT_ORDER = list(ACCOUNTS.keys())
 
 # --------------------------------------------------------------------------
-# Income: salary lands as a credit into AXIS. Add your employer's narration
-# text here (the company name or the text that appears on salary credits).
+# Income: salary keywords loaded dynamically from user profile.
 # --------------------------------------------------------------------------
-SALARY_KEYWORDS = [
-    "SALARY",
-    "PAYROLL",
-    "INCOMEPAY",
-    "WAGES",
-    "CTC",
-    "NPS CREDIT",
-    "TIGER ANALYTICS",   # your employer — salary credits can arrive as just the name
-]
+SALARY_KEYWORDS = profile.get_salary_keywords()
 
 # --------------------------------------------------------------------------
-# Friend (Ashwin): deposits from him are pass-through for the credit-card
-# bills you pay on his behalf. Add his UPI VPAs too if known.
+# Pass-through friend/partner counterparties loaded dynamically from user profile.
 # --------------------------------------------------------------------------
-FRIEND_KEYWORDS = [
-    "ASHWIN",
-    "ASHW",
-    "ASHWIN KUMAR",
-]
-FRIEND_UPI = []  # e.g. ["ashwin@okaxis", "ashwin@ybl"]
+FRIEND_KEYWORDS = profile.get_pass_through_keywords()
+FRIEND_NAME = profile.get_pass_through_name()
+FRIEND_UPI = profile.get_pass_through_upi()
 
 # --------------------------------------------------------------------------
 # Credit-card bill payments (debited from your account). These are the bills
@@ -105,10 +81,9 @@ INVESTMENT_KEYWORDS = [
 # --------------------------------------------------------------------------
 # Your name(s) as they appear in your own UPI/transfer narrations. When the
 # narration names YOU as the payee/beneficiary it's a self-transfer (money
-# moved between your own accounts), even though the UPI text also embeds the
-# other bank's name. Give names that no counterparty you pay would share.
+# moved between your own accounts). Loaded dynamically from user profile.
 # --------------------------------------------------------------------------
-OWN_NAME_KEYWORDS = ["ROSHAN"]
+OWN_NAME_KEYWORDS = profile.get_own_name_keywords()
 
 # --------------------------------------------------------------------------
 # Internal-transfer hints: a narration referencing another own-account name
@@ -138,7 +113,7 @@ P2P_DAY_TOLERANCE = 7          # day-of-month must be within ±7 days
 
 # --------------------------------------------------------------------------
 # Merchant keyword → category. First category whose keyword matches wins, so
-# order matters (put more-specific categories earlier). Substring, case-folded.
+# order matters (put more-specific categories earlier).
 # --------------------------------------------------------------------------
 CATEGORY_KEYWORDS = {
     "Food & Dining": [
@@ -169,16 +144,12 @@ CATEGORY_KEYWORDS = {
         "FURNITURE", "WATCH", "RELIANCE RETAIL",
     ],
     "Rent": [
-        "RENT", "LANDLORD", "HOUSE RENT", "FLAT",
-        "SRINIVAS",   # landlord (monthly room rent)
+        "RENT", "LANDLORD", "HOUSE RENT",
     ],
     "Family & Support": [
-        "KIRAN",   # mother — monthly support sent every month
         "MOTHER", "PARENTS", "FAMILY",
     ],
-    "Partner": [
-        "BRUNESSA",   # partner — monthly grocery/food + personal spends
-    ],
+    "Partner": [],
     "Healthcare": [
         "APOLLO", "PHARMEASY", "PRACTO", "MEDICINE", "PHARMACY",
         "MEDPLUS", "NETMEDS", "1MG", "CLINIC", "DOCTOR", "DENTAL",
@@ -210,7 +181,22 @@ CATEGORY_KEYWORDS = {
     ],
 }
 
+# Merge personal counterparty rules from user profile
+_p_cats = profile.get_personal_categories()
+for _cat, _kws in _p_cats.items():
+    if _cat in CATEGORY_KEYWORDS and isinstance(_kws, list):
+        for _kw in _kws:
+            if _kw not in CATEGORY_KEYWORDS[_cat]:
+                CATEGORY_KEYWORDS[_cat].append(_kw)
+    elif isinstance(_kws, list):
+        CATEGORY_KEYWORDS[_cat] = list(_kws)
+
 DEFAULT_CATEGORY = "Uncategorized"
+
+# --------------------------------------------------------------------------
+# Privacy Mode (Change 25): local | minimized | cloud_ai
+# --------------------------------------------------------------------------
+FINANCE_PRIVACY_MODE = os.getenv("FINANCE_PRIVACY_MODE", profile.get_privacy_mode())
 
 # Transaction classifications.
 CLASSIFICATION_SPEND = "spend"
@@ -225,8 +211,7 @@ CLASSIFICATION_INVESTMENT = "investment"
 # --------------------------------------------------------------------------
 # Finance chat agent (LangGraph + Groq). Model with tool-calling support.
 # The API key lives in GROQ_API_KEY (env var or .env at project root).
-# llama-3.3-70b-versatile was deprecated by Groq; qwen/qwen3.6-27b provides excellent tool calling.
-GROQ_MODEL = "qwen/qwen3.6-27b"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 ALL_CLASSIFICATIONS = [
     CLASSIFICATION_SPEND,
@@ -254,4 +239,4 @@ NON_SPEND = {
 # --------------------------------------------------------------------------
 MATCH_WINDOW_INTERNAL_DAYS = 3   # own-account sweep out ↔ sweep in
 MATCH_WINDOW_CC_DAYS = 7         # cc payment ↔ friend deposit
-MATCH_AMOUNT_TOLERANCE = 0.01    # ₹ 0.01 — transfers are exact
+MATCH_AMOUNT_TOLERANCE = 1.0     # ₹ 1.00 — handles banking roundoff drift

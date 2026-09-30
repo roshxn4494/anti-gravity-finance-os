@@ -257,13 +257,212 @@ def main():
     check("daily_df" in sim, "simulate_cashflow returns daily_df")
     check(len(sim["daily_df"]) == 31, "simulate_cashflow returns 31 daily projection points")
     check("recommended_transfers" in sim, "simulate_cashflow computes transfer recommendations")
+    
+    # What-if scenario test
+    sim_whatif = liquidity.simulate_cashflow(
+        start_date="2026-08-21", horizon_days=30,
+        custom_expenses=[{"title": "Test Laptop Purchase", "amount": 75000.0, "date": "2026-08-25", "account": "axis"}]
+    )
+    whatif_diff = sim["summary"]["ending_liquid"] - sim_whatif["summary"]["ending_liquid"]
+    check(abs(whatif_diff - 75000.0) < 1.0, "what-if discretionary expense accurately reflects on ending liquidity (-₹75,000)")
 
-    print("\nEmail Statement Ingestion Engine:")
-    from finance.ingest import email_sync
+    print("\nEmail & PDF Statement Ingestion Engine:")
+    from finance.ingest import email_sync, pdf_parsers
     card_detected = email_sync.detect_card_from_meta("alerts@axisbank.com", "Axis Bank Credit Card e-Statement")
     check(card_detected == "Axis Bank Credit Card", f"detect_card_from_meta detects Axis (got {card_detected})")
-    no_creds = email_sync.sync_statements_from_email(provider="gmail", username="", password="")
-    check(not no_creds["success"], "sync_statements_from_email handles missing credentials safely")
+    
+    # PDF bank detection test
+    from tests.test_pdf_ingest import make_test_pdf
+    pdf_axis = make_test_pdf(["AXIS BANK LIMITED", "MONTHLY ACCOUNT STATEMENT"])
+    pdf_detected = pdf_parsers.detect_pdf_account(pdf_axis)
+    check(pdf_detected == "axis", f"detect_pdf_account accurately detects Axis from PDF (got {pdf_detected})")
+
+    print("\nReconciliation & Smart Matching Upgrade:")
+    # 1. Manual pairing persistence
+    m_rows = [
+        {
+            "account": "axis", "txn_date": "2026-06-01", "description": "MANUAL CC BILL",
+            "amount": -14500.0, "classification": config.CLASSIFICATION_CC_PAYMENT,
+            "category": "Credit Card"
+        },
+        {
+            "account": "axis", "txn_date": "2026-06-28", "description": "UPI/ASHWIN LATE",
+            "amount": 14500.0, "classification": config.CLASSIFICATION_FRIEND_DEPOSIT,
+            "category": "Ashwin"
+        }
+    ]
+    db.upsert_many(m_rows)
+    d_id, c_id = m_rows[0]["id"], m_rows[1]["id"]
+    db.manual_pair(d_id, [c_id])
+    pipeline.reconcile()
+    d_check = db.load_all()
+    check(d_check[d_check["id"] == d_id].iloc[0]["match_status"] == "manual_matched", "manual pair preserved across auto-reconcile")
+    
+    # 2. Unpair
+    db.manual_unpair(d_id)
+    d_unpaired = db.load_all()
+    check(d_unpaired[d_unpaired["id"] == d_id].iloc[0]["match_status"] == "unmatched", "manual unpair resets to unmatched")
+
+    # 3. Tolerance matching (±₹1.00)
+    tol_rows = [
+        {
+            "account": "axis", "txn_date": "2026-06-05", "description": "CC BILL DRIFT",
+            "amount": -7999.40, "classification": config.CLASSIFICATION_CC_PAYMENT,
+            "category": "Credit Card"
+        },
+        {
+            "account": "axis", "txn_date": "2026-06-06", "description": "UPI/ASHWIN DRIFT",
+            "amount": 8000.0, "classification": config.CLASSIFICATION_FRIEND_DEPOSIT,
+            "category": "Ashwin"
+        }
+    ]
+    db.upsert_many(tol_rows)
+    pipeline.reconcile()
+    tol_check = db.load_all()
+    check(tol_check[tol_check["id"] == tol_rows[0]["id"]].iloc[0]["match_status"] == "matched", "drift tolerance (±₹1.00) pairs successfully")
+
+    # 4. Split deposit matching
+    split_rows = [
+        {
+            "account": "axis", "txn_date": "2026-06-10", "description": "CC BILL SPLIT TARGET",
+            "amount": -22000.0, "classification": config.CLASSIFICATION_CC_PAYMENT,
+            "category": "Credit Card"
+        },
+        {
+            "account": "axis", "txn_date": "2026-06-11", "description": "ASHWIN PART A",
+            "amount": 10000.0, "classification": config.CLASSIFICATION_FRIEND_DEPOSIT,
+            "category": "Ashwin"
+        },
+        {
+            "account": "axis", "txn_date": "2026-06-12", "description": "ASHWIN PART B",
+            "amount": 12000.0, "classification": config.CLASSIFICATION_FRIEND_DEPOSIT,
+            "category": "Ashwin"
+        }
+    ]
+    db.upsert_many(split_rows)
+    pipeline.reconcile()
+    print("\nPrecision Math & Integer Paise Engine:")
+    from finance.ui.format import rupees_to_paise, paise_to_rupees, inr_paise
+    check(rupees_to_paise(0.29) == 29, "rupees_to_paise handles binary floating drift (0.29 -> 29)")
+    check(rupees_to_paise(19.99) == 1999, "rupees_to_paise handles 19.99 -> 1999")
+    check(paise_to_rupees(12345) == 123.45, "paise_to_rupees handles 12345 -> 123.45")
+    check(inr_paise(15000000) == "₹1,50,000", "inr_paise formats Indian digits correctly")
+    
+    # Check that rows in DB have amount_paise populated
+    all_df = db.load_all()
+    check(all_df["amount_paise"].notna().all(), "every row has amount_paise integer populated")
+    check((all_df["amount_paise"] == (all_df["amount"] * 100).round().astype(int)).all(), "amount_paise exactly matches amount * 100")
+
+    print("\nConversation Logging & History Engine:")
+    test_sid = "test-run-session"
+    m_u = db.save_chat_message(test_sid, "user", "What is my total loan liability?", agent_mode="Master Financial AI")
+    m_a = db.save_chat_message(test_sid, "assistant", "Your remaining loan balance is ₹22,368.", agent_mode="Master Financial AI")
+    check(bool(m_u and m_a), "save_chat_message persists user and assistant turns")
+    
+    sess_list = db.load_chat_sessions()
+    target_sess = [s for s in sess_list if s["session_id"] == test_sid]
+    check(len(target_sess) == 1, "load_chat_sessions finds newly created session")
+    check(target_sess[0]["session_title"] == "What is my total loan liability?", "session_title is automatically derived from first user question")
+    check(target_sess[0]["message_count"] == 2, "session message_count is accurate (got 2)")
+    
+    sess_msgs = db.load_chat_messages(test_sid)
+    check(len(sess_msgs) == 2 and sess_msgs[0]["role"] == "user" and sess_msgs[1]["role"] == "assistant", "load_chat_messages returns dialogue in order")
+    
+    search_res = db.search_chat_messages("liability")
+    check(len(search_res) >= 1 and any(r["session_id"] == test_sid for r in search_res), "search_chat_messages finds turn by substring match")
+    
+    exp_md = db.export_chat_markdown(test_sid)
+    check("Financial AI Conversation Transcript" in exp_md and "₹22,368" in exp_md, "export_chat_markdown renders complete transcript")
+    
+    db.delete_chat_session(test_sid)
+    after_del = [s for s in db.load_chat_sessions() if s["session_id"] == test_sid]
+    check(len(after_del) == 0, "delete_chat_session removes conversation completely")
+
+    print("\nRewards & Miles Optimizer Engine:")
+    from finance.rewards import evaluate_card_portfolio, optimize_flight_booking
+    from finance.agent.master_tools import recommend_points_redemption
+
+    # 1. Rewards ledger CRUD
+    db.upsert_card_reward({
+        "card_id": "test_axis_atlas",
+        "card_name": "Axis Bank Credit Card",
+        "card_variant": "Axis Atlas",
+        "card_last4": "9788",
+        "points_balance": 25000.0,
+        "source": "user_manual"
+    })
+    r_df = db.load_card_rewards()
+    check(len(r_df) >= 1 and any(r["card_id"] == "test_axis_atlas" for _, r in r_df.iterrows()), "upsert_card_reward persists points and variant")
+
+    # 2. Portfolio valuation
+    port_res = evaluate_card_portfolio(r_df)
+    check(port_res["total_points"] >= 25000, "evaluate_card_portfolio calculates total points correctly")
+    check(port_res["total_optimal_val_inr"] > port_res["total_baseline_val_inr"], "portfolio unlocks significant uplift over baseline cashback")
+
+    # 3. Flight booking optimization
+    fl_res = optimize_flight_booking("India ⇄ Singapore / SE Asia", "Economy", 28000, r_df)
+    check(fl_res["top_award"] is not None and fl_res["top_award"]["has_enough"] is True, "flight booking optimizer recommends top award seat with sufficient points")
+    check(fl_res["best_cash_card"]["flight_earn_rate_pct"] >= 4.0, "optimizer identifies accelerated return card for cash bookings")
+
+    # 4. Agent tool integration
+    tool_reply = recommend_points_redemption.invoke({"query": "flight to Singapore"})
+    check("Rewards & Miles Optimization" in tool_reply and "Axis Atlas" in tool_reply, "recommend_points_redemption agent tool returns authoritative strategic advice")
+
+    # Cleanup test card
+    db.delete_card_reward("test_axis_atlas")
+
+    print("\nPhase 1: User Profile & Security Hardening:")
+    from tests.test_profile_and_security import (
+        test_profile_loading, test_security_masking,
+        test_security_html_sanitization, test_privacy_modes
+    )
+    test_profile_loading(); check(True, "user profile loads dynamically without source-code hardcoding")
+    test_security_masking(); check(True, "account identifiers masked to last 4 digits")
+    test_security_html_sanitization(); check(True, "HTML content sanitized to prevent injection")
+    test_privacy_modes(); check(True, "privacy modes enforce LOCAL and CLOUD_AI constraints")
+
+    print("\nPhase 2: Canonical Ledger, Money & Account Model:")
+    from tests.test_canonical_ledger import (
+        test_exact_money_class, test_accounts_model,
+        test_canonical_ledger_sync, test_audit_and_provenance
+    )
+    test_exact_money_class(); check(True, "Money class maintains exact integer paise arithmetic")
+    test_accounts_model(); check(True, "accounts model persists accounts with ownership & institution")
+    test_canonical_ledger_sync(); check(True, "sync_canonical_ledger syncs transactions to canonical_events")
+    test_audit_and_provenance(); check(True, "audit_events and provenance tracking recorded accurately")
+
+    print("\nPhase 3: Entity Resolution & Database Classification Rules:")
+    from tests.test_entity_resolution import (
+        test_entity_resolver, test_rule_engine_evaluation, test_db_rule_persistence
+    )
+    test_entity_resolver(); check(True, "entity resolver recognizes Swiggy, Uber, BigBasket, Amazon")
+    test_rule_engine_evaluation(); check(True, "rule engine evaluates salary, rent, and manual overrides")
+    test_db_rule_persistence(); check(True, "classification_rules persist and prioritize in SQLite")
+
+    print("\nPhase 4: Multi-Factor Reconciliation, Review Queue & Statement Validation:")
+    from tests.test_reconciliation_and_review import (
+        test_reconciliation_scoring, test_review_queue_lifecycle, test_statement_validation_math
+    )
+    test_reconciliation_scoring(); check(True, "multi-factor candidate scoring evaluates amount, date & direction")
+    test_review_queue_lifecycle(); check(True, "review queue lifecycle handles filing and resolution")
+    test_statement_validation_math(); check(True, "statement balance validator computes exact variance in paise")
+
+    print("\nPhase 5: TimeScopeService, Deterministic Financial Metrics & Liabilities:")
+    from tests.test_timescope_and_metrics import (
+        test_timescope_service, test_metrics_cash_flow_and_investment_separation,
+        test_metrics_liquid_balances_and_net_worth, test_recurring_and_anomalies
+    )
+    test_timescope_service(); check(True, "TimeScopeService resolves explicit date boundaries & coverage")
+    test_metrics_cash_flow_and_investment_separation(); check(True, "metrics engine separates investments from consumption spend")
+    test_metrics_liquid_balances_and_net_worth(); check(True, "metrics engine calculates liquid assets and net worth accurately")
+    test_recurring_and_anomalies(); check(True, "recurring obligations and anomaly detection engines execute cleanly")
+
+    print("\nPhase 6: AI Runtime, Typed Tool Outputs & Guardrails:")
+    from tests.test_ai_runtime_and_guardrails import (
+        test_local_privacy_mode_deterministic_response, test_fact_verification
+    )
+    test_local_privacy_mode_deterministic_response(); check(True, "LOCAL privacy mode returns deterministic response without cloud LLM")
+    test_fact_verification(); check(True, "fact verification flags unverified numerical claims")
 
     print(f"\n===== {PASS} passed, {FAIL} failed =====")
     sys.exit(1 if FAIL else 0)

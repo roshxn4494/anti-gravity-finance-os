@@ -48,6 +48,33 @@ class TestLiquidityForecast(unittest.TestCase):
         # Total liquid net worth remains positive throughout
         self.assertTrue((df["total_liquid"] > 0).all())
 
+    def test_what_if_discretionary_expense(self):
+        # Baseline simulation
+        base = liquidity.simulate_cashflow(start_date="2026-08-21", horizon_days=30, daily_burn=0.0)
+        base_ending = base["summary"]["ending_liquid"]
+
+        # With ₹50,000 what-if expense on day 10
+        what_if_exp = [{
+            "title": "Flight Tickets to Europe",
+            "amount": 50000.0,
+            "date": "2026-08-31",
+            "account": "axis",
+            "category": "Travel"
+        }]
+        sim = liquidity.simulate_cashflow(
+            start_date="2026-08-21",
+            horizon_days=30,
+            daily_burn=0.0,
+            custom_expenses=what_if_exp
+        )
+        sim_ending = sim["summary"]["ending_liquid"]
+
+        # Ending liquid net worth must be exactly ₹50,000 less
+        self.assertAlmostEqual(base_ending - sim_ending, 50000.0, places=1)
+        exp_events = [e for e in sim["events"] if e["type"] == "what_if_expense"]
+        self.assertEqual(len(exp_events), 1)
+        self.assertEqual(exp_events[0]["title"], "Flight Tickets to Europe")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,7 +4,7 @@ from __future__ import annotations
 from . import cc_pdf_parser, csv_parsers, pdf_parsers
 
 
-def parse_file(uploaded, account: str) -> tuple[list[dict], list[str]]:
+def parse_file(uploaded, account: str, password: str | None = None) -> tuple[list[dict], list[str]]:
     """Parse an uploaded bank statement file (Streamlit UploadedFile or .getvalue())."""
     name = getattr(uploaded, "name", "") or ""
     data = uploaded.getvalue()
@@ -13,7 +13,7 @@ def parse_file(uploaded, account: str) -> tuple[list[dict], list[str]]:
     if ext == "csv":
         return csv_parsers.parse_csv(data, name, account)
     if ext == "pdf":
-        return pdf_parsers.parse_pdf(data, name, account)
+        return pdf_parsers.parse_pdf(data, name, account, password=password)
     raise ValueError(
         f"Unsupported file type '.{ext}'. Please upload a CSV or PDF statement "
         f"downloaded from netbanking.")
@@ -69,11 +69,13 @@ def parse_cc_file(
     raise ValueError(f"Unsupported credit card statement file '.{ext}'. Please upload a PDF or CSV statement.")
 
 
-def detect_account(uploaded) -> str | None:
+def detect_account(uploaded, password: str | None = None) -> str | None:
     """Best-effort auto-detection of the bank/account for an uploaded file."""
     name = getattr(uploaded, "name", "") or ""
     data = uploaded.getvalue()
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
     if ext == "csv":
         return csv_parsers.detect_account(data, name)
+    if ext == "pdf":
+        return pdf_parsers.detect_pdf_account(data, password=password)
     return None

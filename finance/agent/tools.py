@@ -17,7 +17,8 @@ Month convention for tool args:
 from __future__ import annotations
 
 import os
-from datetime import date
+import re
+from datetime import date, timedelta
 from pathlib import Path
 import pandas as pd
 from langchain_core.tools import tool
@@ -393,6 +394,17 @@ def category_spend(category: str, month: str = "") -> str:
         title_word = "Spend"
 
     if agg.empty:
+        if resolved_cat == "Rent":
+            from ..services.recurring import get_monthly_obligations_summary
+            all_ms = _months(df) if df is not None and not df.empty else []
+            target_m = _normalize_month_arg(month, all_ms) if all_ms else month
+            if target_m:
+                ob = get_monthly_obligations_summary(target_m)
+                rent_item = ob.get("rent", {})
+                if rent_item.get("status") == "paid":
+                    early_txt = f" ({rent_item['note']})" if rent_item.get("is_early") else ""
+                    return (f"Rent for {lbl}: {_inr(rent_item['paid_amount'])} paid on {rent_item['paid_date']} "
+                            f"via {rent_item['account']} to {rent_item['payee']}{early_txt}.")
         return f"No {title_word.lower()} in '{resolved_cat}' ({lbl})."
 
     total = agg["amount"].abs().sum()
@@ -667,6 +679,7 @@ def account_balances() -> str:
     """Latest statement balances and liquid savings across bank accounts (Axis, SBI, Kotak 811),
     including Kotak Active Money (Smart Auto-Sweep FD) and total liquid reserves."""
     try:
+        db.sync_account_balances_from_ledger()
         b_df = db.load_account_balances()
     except Exception:
         b_df = pd.DataFrame()
@@ -851,8 +864,85 @@ def bank_loans_tracker(loan_name: str = "") -> str:
     return "\n".join(out)
 
 
+def _normalize_month_arg(month: str, all_ms: list[str]) -> str:
+    if not month:
+        return all_ms[-1] if all_ms else ""
+    m = str(month).strip().lower().replace(" ", "_")
+    if m in ("latest", "this_month", "current", "current_month"):
+        return all_ms[-1] if all_ms else ""
+    if m in ("last_month", "prev_month", "previous_month"):
+        return all_ms[-2] if len(all_ms) >= 2 else (all_ms[-1] if all_ms else "")
+    if re.match(r"^\d{4}-\d{2}$", month.strip()):
+        return month.strip()
+    month_map = {
+        "january": "01", "jan": "01",
+        "february": "02", "feb": "02",
+        "march": "03", "mar": "03",
+        "april": "04", "apr": "04",
+        "may": "05",
+        "june": "06", "jun": "06",
+        "july": "07", "jul": "07",
+        "august": "08", "aug": "08",
+        "september": "09", "sep": "09", "sept": "09",
+        "october": "10", "oct": "10",
+        "november": "11", "nov": "11",
+        "december": "12", "dec": "12",
+    }
+    for k, v in month_map.items():
+        if k in m:
+            yr_match = re.search(r"\b(20\d\d)\b", m)
+            yr = yr_match.group(1) if yr_match else (all_ms[-1][:4] if all_ms else "2026")
+            return f"{yr}-{v}"
+    return month.strip()
+
+
+@tool
+def monthly_obligations_checklist(month: str = "") -> str:
+    """Cycle-aware checklist of monthly recurring obligations, house rent, personal loan EMIs, and credit card bills.
+    Correctly recognizes early month-end payments (such as September rent paid 1 day early on 31-Aug) and matches
+    all personal loan auto-debits and credit card bill settlements.
+    month = optional target month ('YYYY-MM', 'September', 'latest', or blank)."""
+    from ..services.recurring import get_monthly_obligations_summary
+    df = _load()
+    all_ms = _months(df) if df is not None and not df.empty else []
+    target_month = _normalize_month_arg(month, all_ms) if all_ms else month
+    data = get_monthly_obligations_summary(target_month)
+    summ = data["summary"]
+    rent = data["rent"]
+    loans = data["loans"]
+    ccs = data["credit_cards"]
+
+    out = [
+        f"**📋 Monthly Obligations & Bills Checklist — {data['month']}**",
+        f"**Overall Status**: {summ['paid_count']}/{summ['total_count']} Cleared ({_inr(summ['total_paid'])} paid of {_inr(summ['total_expected'])} expected)\n",
+        "**🏠 House Rent:**"
+    ]
+    if rent["status"] == "paid":
+        early_note = f" ({rent['note']})" if rent.get("is_early") else ""
+        out.append(f"  • ✅ **{rent['title']}**: Paid {_inr(rent['paid_amount'])} on {rent['paid_date']} via {rent['account']} to {rent['payee']}{early_note}")
+    else:
+        out.append(f"  • ⏳ **{rent['title']}**: Pending (Expected {_inr(rent['expected_amount'])} to {rent['payee']})")
+
+    out.append("\n**🏦 Personal & NBFC Loan EMIs:**")
+    for l in loans:
+        if l["status"] == "paid":
+            out.append(f"  • ✅ **{l['title']}** ({l['lender']}): Paid {_inr(l['paid_amount'])} on {l['paid_date']} via {l['account']}")
+        else:
+            out.append(f"  • ⏳ **{l['title']}** ({l['lender']}): Pending {_inr(l['expected_amount'])} (Due ~{l['debit_day']}th)")
+
+    out.append("\n**💳 Credit Card Bill Settlements:**")
+    for c in ccs:
+        if c["status"] == "paid":
+            out.append(f"  • ✅ **{c['title']}**: Settled {_inr(c['paid_amount'])} on {c['paid_date']} via {c['account']}")
+        else:
+            out.append(f"  • ⏳ **{c['title']}**: Pending {_inr(c['expected_amount'])} (Due {c.get('due_date', '—')})")
+
+    return "\n".join(out)
+
+
 TOOLS = [
     monthly_overview,
+    monthly_obligations_checklist,
     daily_spend,
     spend_total,
     spend_by_category,

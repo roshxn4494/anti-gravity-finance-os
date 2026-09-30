@@ -78,11 +78,11 @@ def master_financial_summary(month: str = "") -> str:
         m_income = income_df["amount"].sum()
         m_cc_pay = cc_pay_df["amount"].abs().sum()
 
-    # Calculate regular baseline salary from historical credits (typically credited ~29th-30th)
-    baseline_salary = 112729.0
+    # Calculate regular baseline salary from historical credits
+    baseline_salary = 0.0
     if not income_df.empty:
         sal_by_m = income_df.groupby(income_df["txn_date"].str[:7])["amount"].sum().sort_index()
-        valid_sals = sal_by_m[sal_by_m > 50000]
+        valid_sals = sal_by_m[sal_by_m > 0]
         if not valid_sals.empty:
             baseline_salary = float(valid_sals.iloc[-1])
 
@@ -181,13 +181,13 @@ def master_debt_and_dti_overview() -> str:
     non_emi_cc_dues = max(0.0, tot_cc_dues - tot_cc_emi)
     tot_ashwin_exposure = cc_future_emis + non_emi_cc_dues + ashwin_loan_rem
 
-    # Establish baseline salary
-    baseline_salary = 112729.0
+    # Establish baseline salary dynamically from income transactions
+    baseline_salary = 0.0
     if not txns.empty:
         inc = txns[txns["classification"] == config.CLASSIFICATION_INCOME]
         if not inc.empty:
             sal_by_m = inc.groupby(inc["txn_date"].str[:7])["amount"].sum().sort_index()
-            valid_sals = sal_by_m[sal_by_m > 50000]
+            valid_sals = sal_by_m[sal_by_m > 0]
             if not valid_sals.empty:
                 baseline_salary = float(valid_sals.iloc[-1])
 
@@ -436,6 +436,71 @@ def master_sync_email_statements(provider: str = "gmail", days_back: int = 45) -
     return "\n".join(out)
 
 
+@tool
+def recommend_points_redemption(
+    query: str = "",
+    destination: str = "",
+    cabin: str = "Economy",
+    cash_price: float = 0.0,
+) -> str:
+    """Intelligently recommend the best credit card reward points to redeem,
+    best airline/hotel transfer partners, or which card to swipe for a flight or hotel booking.
+    query: optional user query (e.g. 'flight to Singapore', 'best way to use points', 'Amex Taj').
+    destination: destination or route keyword (e.g. 'Singapore', 'Dubai', 'London', 'Domestic', 'US').
+    cabin: 'Economy' or 'Business'.
+    cash_price: optional cash ticket price in INR.
+    """
+    from finance.rewards import evaluate_card_portfolio, optimize_flight_booking
+    from finance.rewards.catalog import FLIGHT_BENCHMARKS
+
+    cards_df = db.load_card_rewards()
+    if cards_df.empty:
+        return "⚠️ No credit card reward points found. Please check or enter your points in the '🎯 Rewards & Miles' tab."
+
+    # Determine destination / route
+    target_route = "India ⇄ Singapore / SE Asia"
+    combined_q = f"{query} {destination}".lower()
+
+    if any(w in combined_q for w in ("dubai", "dxb", "doha", "abu dhabi", "middle east", "uae")):
+        target_route = "India ⇄ Dubai / Middle East"
+    elif any(w in combined_q for w in ("london", "uk", "europe", "paris", "frankfurt", "lhr")):
+        target_route = "India ⇄ London / UK / Europe"
+    elif any(w in combined_q for w in ("domestic", "mumbai", "delhi", "bangalore", "bengaluru", "goa")):
+        target_route = "Domestic India"
+    elif any(w in combined_q for w in ("us", "usa", "america", "jfk", "sfo", "new york")):
+        target_route = "India ⇄ US / North America"
+    elif any(w in combined_q for w in ("singapore", "sin", "bali", "bangkok", "thai", "se asia")):
+        target_route = "India ⇄ Singapore / SE Asia"
+
+    portfolio_eval = evaluate_card_portfolio(cards_df)
+    flight_eval = optimize_flight_booking(
+        route_name=target_route,
+        cabin=cabin,
+        cash_fare_inr=cash_price,
+        cards_df=cards_df,
+    )
+
+    out = [
+        f"**🎯 Credit Card Rewards & Miles Optimization ({target_route} — {flight_eval['cabin']}):**\n",
+        f"**💳 Your Active Card Points Portfolio:**",
+    ]
+
+    for c in portfolio_eval["cards"]:
+        pts_str = f"{int(c['points_balance']):,}" if c["points_balance"] > 0 else "0"
+        bp = c["best_partner"]
+        bp_desc = f" -> Best Partner: {bp['partner']} ({_inr(c['optimal_value_inr'])})" if bp and c['points_balance'] > 0 else ""
+        out.append(f"• **{c['card_variant']}** ({c['card_last4']}): **{pts_str} {c['currency_name']}**{bp_desc}")
+
+    out.append(f"\n• **Total Portfolio Points**: **{int(portfolio_eval['total_points']):,}**")
+    out.append(f"• **Baseline Cashback Value**: {_inr(portfolio_eval['total_baseline_val_inr'])}")
+    out.append(f"• **Maximum Optimized Value**: **{_inr(portfolio_eval['total_optimal_val_inr'])}** (+{_inr(portfolio_eval['net_uplift_inr'])} uplift)\n")
+
+    out.append("**✈️ Flight Booking Strategic Verdict:**")
+    out.append(flight_eval["verdict_summary"])
+
+    return "\n".join(out)
+
+
 MASTER_TOOLS = [
     master_financial_summary,
     master_debt_and_dti_overview,
@@ -444,4 +509,5 @@ MASTER_TOOLS = [
     master_liquidity_and_upcoming_outflows,
     master_prepayment_advisor,
     master_sync_email_statements,
+    recommend_points_redemption,
 ] + bank_tools.TOOLS + cc_tools.ALL_CC_TOOLS

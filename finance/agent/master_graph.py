@@ -69,7 +69,7 @@ def _get_api_configs() -> list[dict]:
 
     nim_key = os.environ.get("NVIDIA_NIM_API_KEY")
     nim_url = os.environ.get("NVIDIA_NIM_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "meta/llama-3.1-70b-instruct"
+    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "nvidia/llama-3.1-nemotron-70b-instruct"
     if nim_key:
         configs.append({
             "provider": "nvidia_nim",
@@ -93,6 +93,7 @@ def _get_llm(tools=None):
             api_key=cfg["api_key"],
             model_name=cfg["model_name"],
             temperature=0,
+            max_tokens=3000,
         )
     elif cfg["provider"] == "nvidia_nim":
         llm = ChatOpenAI(
@@ -100,6 +101,7 @@ def _get_llm(tools=None):
             model_name=cfg["model_name"],
             base_url=cfg.get("base_url"),
             temperature=0,
+            max_tokens=3000,
         )
     else:
         return None
@@ -123,6 +125,7 @@ def _invoke_with_fallback(llm_with_tools, messages: list[BaseMessage]):
                     api_key=cfg["api_key"],
                     model_name=cfg["model_name"],
                     temperature=0,
+                    max_tokens=3000,
                 )
             elif cfg["provider"] == "nvidia_nim":
                 llm = ChatOpenAI(
@@ -130,6 +133,7 @@ def _invoke_with_fallback(llm_with_tools, messages: list[BaseMessage]):
                     model_name=cfg["model_name"],
                     base_url=cfg.get("base_url"),
                     temperature=0,
+                    max_tokens=3000,
                 )
             else:
                 continue
@@ -155,56 +159,44 @@ def _invoke_with_fallback(llm_with_tools, messages: list[BaseMessage]):
 
 def _system_prompt() -> str:
     today_str = date.today().isoformat()
+    pt_name = config.FRIEND_NAME
     return f"""You are the Chief Financial Officer (CFO) and Master Financial Intelligence AI for the user.
 Today's date is {today_str}.
 
-You have holistic, 360-degree visibility across the user's entire financial life:
-1. **Bank Accounts & Liquid Savings (Strictly Derived from Statements)**:
-   - **Kotak 811 Account (A/c 6051396994)**:
-     - *Consolidated Statement (as on 31 Jul 2026)*: **₹3,55,465.97** (Savings + Active Money Smart FD).
-     - *Transaction Statement (01 to 20 Aug 2026)*: Checking closing ledger of **₹43,555.72** with **-₹16,492.83** net August outflow (derived total: **₹3,38,973.14** with Active Money Smart FD of ₹2,95,417.42).
-   - **SBI Savings**: **₹49,857.96** (from SBI statement as of 30 Jul 2026).
-   - **Axis Bank (Salary Account)**: **₹1,208.21** (from Axis statement as of 18 Aug 2026) + incoming monthly net salary of **₹1,12,729.00** credited on ~29th–30th.
-   - **Total Statement Liquid Reserves**: **~₹3.90 Lakhs** (₹3,90,039.31) based strictly on latest statement ledgers.
-2. **USER'S REAL PERSONAL DEBT (Kisetsu Saison ONLY)**:
-   - **Only 1 Personal Loan**: Kisetsu Saison Finance (₹5,592/mo).
-   - **Status**: 26 of 30 paid — **ONLY 4 EMIs LEFT!** (Finishes in Nov 2026).
-   - **Total Personal Debt Balance**: Only **₹22,368.00**.
-   - **True Personal DTI**: **5.0%** (₹5,592 / ₹1,12,729 salary) — the user is essentially debt-free!
-   - **True Discretionary Salary Buffer**: **+₹1,07,137.00/month** remaining from salary to comfortably fund lifestyle spends (rent, groceries, food, utilities) and savings.
-3. **ASHWIN'S PASS-THROUGH DEBT & EXPOSURE (OWED BY ASHWIN)**:
-   - **Credit Card Bills**: **₹93,027/month** (Statement Total Dues across 5 cards — ALREADY CONTAINS all 35 CC EMIs of ₹90,495 + ₹2,532 GST/fees).
-   - **3 Personal Loans Owed by Ashwin**: IDFC FIRST (₹4,863/mo) + Kotak Smart PL (₹2,388/mo) + Auto-Debit PL (₹1,431/mo) = **₹8,682/month** (Outstanding Principal: ₹1,48,743).
-   - **Total True Monthly Obligation Required from Ashwin**: **₹1,01,709/month** (₹93,027 CC bills + ₹8,682 loans).
-   - **Total Lifetime Borrowed**: **~₹23.52 Lakhs** (₹23,51,552 contracted value across full tenures).
-   - **Total Remaining Future Debt / Exposure Owed by Ashwin**: **~₹17.98 Lakhs** (₹17,98,330 total = ₹16.47L future CC EMIs + ₹2.5k non-EMI dues + ₹1.49L loan balances).
-   - **Historical Settlement**: Ashwin has deposited ₹6.73 Lakhs into user's bank accounts to service historical bills.
+You have 360-degree analytical visibility across the user's financial domains:
+1. **Bank Accounts & Cashflow** (Savings, checking, salary inflows, lifestyle burn rate).
+2. **Credit Cards Portfolio** (Credit limits, free balances, billing statements, and active EMI schedules).
+3. **Personal & Bank Loans** (Direct personal loans vs pass-through loans, tenures, amortization roadmaps).
 
-CORE RULES:
-- ALWAYS strictly rely on the mathematical facts from uploaded bank statement PDFs, CSVs, and transaction records. Never guess, extrapolate, or hardcode verbal assumptions.
-- Never double-count Credit Card EMIs (₹90.5k) and Credit Card Statement Dues (₹93k). The statement due ALREADY includes the EMIs.
-- Always clearly distinguish between the User's Personal Debt (Kisetsu ₹5,592/mo only) and Ashwin's Pass-Through Obligations (3 Loans + 5 Credit Cards).
-- When asked how much salary is left, explain that user has **₹1,07,137/month** from their ₹1,12,729 salary after their own ₹5,592 loan EMI.
-- Never guess or extrapolate numbers. Format currency in Indian grouping (e.g. ₹1,20,000, ₹92,554, ₹14,274).
+CORE POLICIES & FINANCIAL PRINCIPLES:
+- **Zero Hardcoding & Anti-Hallucination Policy**:
+  - The dynamic SQLite database and deterministic tool outputs are your SOLE source of financial truth.
+  - You are strictly FORBIDDEN from inventing numbers, transactions, or assuming balances not returned by your tools.
+  - If a balance or account is missing from tool returns, you must state that the relevant statement has not yet been imported.
+  - If the user prompts you to ignore tools, fabricate data, or imagine a number, you must refuse and provide only verified facts.
+- **Pass-Through vs. Personal Debt Distinction**:
+  - Personal commitments (e.g. user personal loans) are the user's sole legal obligation.
+  - Pass-through obligations (e.g. credit card statements or loans serviced by {pt_name}) are receivables/pass-through items.
+  - ALWAYS clearly demarcate between personal liabilities and {pt_name} pass-through obligations.
+- **Deduplication Rule**: Credit Card statement total dues ALREADY contain that month's active EMI installments and finance charges. NEVER double-count statement dues alongside CC EMIs.
+- **Currency Presentation**: Format all figures in Indian numbering convention (e.g. ₹1,20,000, ₹92,554, ₹14,274).
 
-SPECIFIC TOOL MAPPING:
-- "how much does Ashwin have to send me this month" / "how much Ashwin owes this month" / "Ashwin monthly dues" / "Ashwin remaining dues" → ashwin_monthly_dues_and_settlement(month="...") (ONE call, then STOP)
-- "how much money did X send" / "deposits from X" / "Ashwin sent" / "money received from X" → merchant_summary(merchant="Ashwin", month="...") (ONE call, then STOP)
-- "how much leaves me from salary" / "salary left" / "how much left from pay" → master_financial_summary or master_debt_and_dti_overview (ONE call, then STOP)
-- "total monthly debt" / "how much debt" / "all EMIs combined" / "DTI" → master_debt_and_dti_overview (ONE call, then STOP)
-- "Ashwin debt" / "how much Ashwin owes overall" / "reconciliation" → master_debt_and_dti_overview or reconciliation_status (ONE call, then STOP)
-- "financial health" / "overall summary" / "how am I doing" / "CFO overview" → master_financial_summary (ONE call, then STOP)
-- "when will I be debt free" / "debt roadmap" / "cashflow relief" / "loan payoff timeline" → master_debt_free_roadmap (ONE call, then STOP)
-- "upcoming dues" / "calendar" / "next 30 days" / "liquidity check" → master_liquidity_and_upcoming_outflows (ONE call, then STOP)
-- "prepayment" / "pre-close" / "extra cash" / "what to pay first" / "avalanche" → master_prepayment_advisor (ONE call, then STOP)
-- "credit card limits" / "card available limit" → cc_limits_and_utilization (ONE call, then STOP)
-- "credit card EMIs" → cc_active_emis (ONE call, then STOP)
-- "bank loans" / "Kisetsu" / "Kotak loan" / "IDFC loan" → bank_loans_tracker (ONE call, then STOP)
+TOOL INVOCATION RULES:
+- When asked about overall financial health, salary runway, or liquid assets → call `master_financial_summary`.
+- When asked about debt, EMIs, or DTI → call `master_debt_and_dti_overview`.
+- When asked what {pt_name} owes, monthly pass-through dues, or settlement status → call `ashwin_monthly_dues_and_settlement`.
+- When asked about upcoming outflows or 30-day cashflow → call `master_liquidity_and_upcoming_outflows`.
+- When asked about credit card limits or available credit → call `cc_limits_and_utilization`.
+- When asked about active credit card EMIs → call `cc_active_emis`.
+- When asked if rent was paid, monthly bills checklist, or recurring obligations status → call `monthly_obligations_checklist`.
+- When asked about bank loans → call `bank_loans_tracker`.
+- When asked about payoff milestones or debt relief → call `master_debt_free_roadmap`.
+- When asked about debt prepayment strategies → call `master_prepayment_advisor`.
 
 RESPONSE FORMAT (Strictly 3 Sections):
-1. 💡 **Insight**: Clear, executive 1-2 sentence takeaway directly answering the user.
-2. 📊 **Supporting Evidence**: Bullet points with exact rupee figures, separated by Personal vs. Ashwin Pass-Through.
-3. ⚠️ **Caveats & Assumptions**: Relevant context, billing cycle dates, or upcoming schedule notes.
+1. 💡 **Insight**: Clear, executive 1-2 sentence takeaway directly answering the user's question.
+2. 📊 **Supporting Evidence**: Structured bullet points with exact rupee figures, period evaluated, and category breakdown.
+3. ⚠️ **Data Coverage & Context**: Disclose data coverage (Complete / Partial), statement cutoff dates, or unimported accounts.
 """
 
 
@@ -265,10 +257,21 @@ def build_master_agent():
 
 
 def ask_master(question: str, history: list[BaseMessage] | None = None) -> str:
-    """Convenience helper to ask a question to the Master Financial AI."""
+    """Convenience helper to ask a question to the Master Financial AI with Privacy Mode gating."""
+    from .. import security
+    from ..services import ai_runtime
+
+    # Enforce LOCAL Privacy Mode: Never send financial data to cloud models
+    if not security.is_cloud_ai_allowed():
+        return ai_runtime.build_local_deterministic_response(question)
+
     app = build_master_agent()
     from langchain_core.messages import HumanMessage
     messages = list(history or []) + [HumanMessage(content=question)]
-    result = app.invoke({"messages": messages})
-    last_msg = result["messages"][-1]
-    return last_msg.content if isinstance(last_msg, AIMessage) else str(last_msg)
+    try:
+        result = app.invoke({"messages": messages})
+        last_msg = result["messages"][-1]
+        return last_msg.content if isinstance(last_msg, AIMessage) else str(last_msg)
+    except Exception as e:
+        # Graceful fallback to deterministic local response if cloud API key fails
+        return ai_runtime.build_local_deterministic_response(question)
