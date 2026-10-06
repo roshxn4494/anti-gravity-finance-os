@@ -184,11 +184,13 @@ CORE POLICIES & FINANCIAL PRINCIPLES:
 TOOL INVOCATION RULES:
 - When asked about overall financial health, salary runway, or liquid assets → call `master_financial_summary`.
 - When asked about debt, EMIs, or DTI → call `master_debt_and_dti_overview`.
-- When asked what {pt_name} owes, monthly pass-through dues, or settlement status → call `ashwin_monthly_dues_and_settlement`.
+- When asked what {pt_name} owes, his balance, monthly pass-through dues, or settlement status → call `ashwin_monthly_dues_and_settlement` or `reconciliation_status`.
+- When asked if rent was paid or about recurring monthly obligations → call `monthly_obligations_checklist` or `find_transactions(query="Srinivas")`.
+- When asked if partner/family was paid or about transfers to Brunessa/Kiran → call `category_spend(category="Partner")`, `category_by_month(category="Partner")`, or `find_transactions(query="Brunessa")`.
+- When asked about specific transaction amounts or line items → call `cc_line_items` (for credit card purchases) and `find_transactions` (for bank transactions).
 - When asked about upcoming outflows or 30-day cashflow → call `master_liquidity_and_upcoming_outflows`.
-- When asked about credit card limits or available credit → call `cc_limits_and_utilization`.
+- When asked about credit card statement dues, limits, or billing cycles → call `cc_statement_summary`.
 - When asked about active credit card EMIs → call `cc_active_emis`.
-- When asked if rent was paid, monthly bills checklist, or recurring obligations status → call `monthly_obligations_checklist`.
 - When asked about bank loans → call `bank_loans_tracker`.
 - When asked about payoff milestones or debt relief → call `master_debt_free_roadmap`.
 - When asked about debt prepayment strategies → call `master_prepayment_advisor`.
