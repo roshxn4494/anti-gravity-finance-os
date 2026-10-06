@@ -173,8 +173,8 @@ def cc_fee_tracker(card_name: str = "") -> str:
 
 
 @tool
-def cc_line_items(merchant: str = "", card_name: str = "", month: str = "") -> str:
-    """Search specific credit card line items/purchases by merchant or description (e.g. Swiggy, Amazon, Uber, Apple)."""
+def cc_line_items(merchant: str = "", card_name: str = "", month: str = "", amount: float | None = None) -> str:
+    """Search specific credit card line items/purchases by merchant, description, amount (e.g. 28995), or card name."""
     txns = _load_txns()
     if txns is None or txns.empty:
         return "No credit card transaction line items imported yet."
@@ -182,8 +182,21 @@ def cc_line_items(merchant: str = "", card_name: str = "", month: str = "") -> s
     hit = txns
     if merchant:
         q = str(merchant).strip().upper()
-        hit = hit[hit["description"].str.upper().str.contains(q, na=False)
-                  | hit["counterparty"].str.upper().str.contains(q, na=False)]
+        # Also match numeric strings against amount (e.g. '28995' or '28,995')
+        q_clean = re.sub(r"[^\d.]", "", q)
+        if q_clean and len(q_clean) >= 3:
+            amt_cond = hit["amount"].abs().astype(str).str.contains(q_clean, na=False)
+        else:
+            amt_cond = pd.Series([False] * len(hit), index=hit.index)
+
+        hit = hit[
+            hit["description"].str.upper().str.contains(q, na=False)
+            | hit["counterparty"].str.upper().str.contains(q, na=False)
+            | amt_cond
+        ]
+
+    if amount is not None and amount > 0:
+        hit = hit[(hit["amount"].abs() >= amount - 1.0) & (hit["amount"].abs() <= amount + 1.0)]
 
     if card_name:
         c_q = str(card_name).strip().upper()
@@ -194,13 +207,15 @@ def cc_line_items(merchant: str = "", card_name: str = "", month: str = "") -> s
         hit = hit[hit["txn_date"].str.startswith(m_q)]
 
     if hit.empty:
-        return f"No credit card purchases found matching '{merchant}'."
+        return f"No credit card purchases found matching '{merchant or amount}'."
 
     total = hit[hit["amount"] > 0]["amount"].sum()
-    out = [f"Credit Card Line Items matching '{merchant}': {_inr(total)} across {len(hit)} purchases:", "Transactions:"]
+    query_label = merchant or (str(amount) if amount else "query")
+    out = [f"Credit Card Line Items matching '{query_label}': {_inr(total)} across {len(hit)} purchases:", "Transactions:"]
 
-    for _, r in hit.head(10).iterrows():
-        out.append(f"  • {r['txn_date']} [{r['card_name']}] {_inr(r['amount'])} — {r['description'][:50]}")
+    for _, r in hit.head(15).iterrows():
+        c_l4 = f" (..{r['card_last4']})" if r.get('card_last4') else ""
+        out.append(f"  • {r['txn_date']} [{r['card_name']}{c_l4}] {_inr(r['amount'])} — {r['description'][:60]}")
 
     return "\n".join(out)
 

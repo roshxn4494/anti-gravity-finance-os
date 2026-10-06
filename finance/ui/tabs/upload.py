@@ -202,7 +202,9 @@ def tab_upload():
                         with b_cols[idx]:
                             st.metric(r["label"], inr(r["total_balance"]), delta=f"As of {r['as_of_date']}")
 
-                st.metric("Statements Processed", res["statements_saved"], delta=f"{res['emis_saved']} Active EMIs Ingested", delta_color="normal")
+                txns_cnt = res.get("txns_saved", 0)
+                emis_cnt = res.get("emis_saved", 0)
+                st.metric("Statements Processed", res["statements_saved"], delta=f"{txns_cnt} Line Items & {emis_cnt} EMIs Ingested", delta_color="normal")
                 if res["details"]:
                     st.subheader("📑 Ingested Statements Details")
                     st.dataframe(pd.DataFrame(res["details"]), width="stretch", hide_index=True)

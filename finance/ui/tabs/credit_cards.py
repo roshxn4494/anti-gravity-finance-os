@@ -237,3 +237,45 @@ def tab_credit_cards():
             )
             st.plotly_chart(fig, width="stretch")
 
+    # Section 5: 💳 Itemized Credit Card Purchases & Search
+    if not cc_txns.empty:
+        st.subheader("💳 Credit Card Purchases & Line Items", divider=True)
+        col_s1, col_s2 = st.columns([2, 1])
+        with col_s1:
+            q_search = st.text_input("🔍 Search Card Line Items (Merchant, Narration, Amount)", placeholder="e.g. Swiggy, Amazon, ASSPL, 28995...", key="cc_txn_search")
+        with col_s2:
+            cats = ["All Categories"] + sorted([c for c in cc_txns["category"].dropna().unique() if str(c).strip()])
+            sel_cat = st.selectbox("Filter Category", cats, key="cc_cat_filter")
+
+        filtered_txns = cc_txns.copy()
+        if selected_option != "All Credit Cards" and selected_option in card_map:
+            filtered_txns = filtered_txns[filtered_txns["card_name"] == sel_card_name]
+
+        if sel_cat != "All Categories":
+            filtered_txns = filtered_txns[filtered_txns["category"] == sel_cat]
+
+        if q_search:
+            q_lower = q_search.strip().lower()
+            filtered_txns = filtered_txns[
+                filtered_txns["description"].astype(str).str.lower().str.contains(q_lower) |
+                filtered_txns["counterparty"].astype(str).str.lower().str.contains(q_lower) |
+                filtered_txns["amount"].astype(str).str.contains(q_lower)
+            ]
+
+        st.caption(f"Showing **{len(filtered_txns)}** credit card transaction line items.")
+        if not filtered_txns.empty:
+            disp_txns = filtered_txns.copy()
+            disp_txns["Formatted Amount"] = disp_txns["amount"].apply(lambda x: inr(x))
+            disp_cols = ["txn_date", "card_name", "description", "category", "Formatted Amount"]
+            st.dataframe(
+                disp_txns[disp_cols].rename(columns={
+                    "txn_date": "Date",
+                    "card_name": "Card",
+                    "description": "Narration / Merchant",
+                    "category": "Category",
+                    "Formatted Amount": "Amount (₹)"
+                }),
+                width="stretch",
+                hide_index=True
+            )
+

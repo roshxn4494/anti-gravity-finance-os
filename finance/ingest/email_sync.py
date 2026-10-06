@@ -293,6 +293,7 @@ def sync_statements_from_email(
 
     saved_stmts = 0
     saved_emis = 0
+    saved_txns = 0
     details = []
 
     for item in fetched_emails:
@@ -324,8 +325,11 @@ def sync_statements_from_email(
                 continue
 
         if parsed_info:
-            # Save Statement & EMIs to DB
+            # Save Statement, Transactions & EMIs to DB
             stmt_id = db.save_cc_statement(parsed_info)
+            if parsed_txns:
+                db.upsert_cc_transactions(parsed_txns)
+                saved_txns += len(parsed_txns)
             if parsed_emis:
                 db.upsert_cc_emis(parsed_emis)
                 saved_emis += len(parsed_emis)
@@ -337,6 +341,7 @@ def sync_statements_from_email(
                 "due_date": parsed_info["due_date"],
                 "total_due": parsed_info["total_due"],
                 "min_due": parsed_info["min_due"],
+                "txns_count": len(parsed_txns),
                 "emis_count": len(parsed_emis),
                 "status": "✅ Parsed & Saved",
                 "filename": file_name
@@ -348,6 +353,7 @@ def sync_statements_from_email(
                 "due_date": "-",
                 "total_due": 0.0,
                 "min_due": 0.0,
+                "txns_count": 0,
                 "emis_count": 0,
                 "status": f"⚠️ Encrypted or Unparseable ({parse_warning or 'Password Required'})",
                 "filename": file_name
@@ -358,6 +364,7 @@ def sync_statements_from_email(
         "message": f"Successfully processed {len(fetched_emails)} statement attachment(s) from {provider.capitalize()}.",
         "statements_saved": saved_stmts,
         "emis_saved": saved_emis,
+        "txns_saved": saved_txns,
         "details": details
     }
 
