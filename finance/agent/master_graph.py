@@ -69,7 +69,7 @@ def _get_api_configs() -> list[dict]:
 
     nim_key = os.environ.get("NVIDIA_NIM_API_KEY")
     nim_url = os.environ.get("NVIDIA_NIM_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "nvidia/llama-3.1-nemotron-70b-instruct"
+    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "meta/llama-3.2-90b-vision-instruct"
     if nim_key:
         configs.append({
             "provider": "nvidia_nim",
@@ -119,38 +119,42 @@ def _invoke_with_fallback(llm_with_tools, messages: list[BaseMessage]):
 
     last_error = None
     for idx, cfg in enumerate(api_configs):
-        try:
-            if cfg["provider"] == "groq":
-                llm = ChatGroq(
-                    api_key=cfg["api_key"],
-                    model_name=cfg["model_name"],
-                    temperature=0,
-                    max_tokens=3000,
-                )
-            elif cfg["provider"] == "nvidia_nim":
-                llm = ChatOpenAI(
-                    api_key=cfg["api_key"],
-                    model_name=cfg["model_name"],
-                    base_url=cfg.get("base_url"),
-                    temperature=0,
-                    max_tokens=3000,
-                )
-            else:
-                continue
+        for attempt in range(2):
+            try:
+                if cfg["provider"] == "groq":
+                    llm = ChatGroq(
+                        api_key=cfg["api_key"],
+                        model_name=cfg["model_name"],
+                        temperature=0,
+                        max_tokens=3000,
+                    )
+                elif cfg["provider"] == "nvidia_nim":
+                    llm = ChatOpenAI(
+                        api_key=cfg["api_key"],
+                        model_name=cfg["model_name"],
+                        base_url=cfg.get("base_url"),
+                        temperature=0,
+                        max_tokens=3000,
+                    )
+                else:
+                    break
 
-            if MASTER_TOOLS:
-                llm = llm.bind_tools(MASTER_TOOLS)
+                if MASTER_TOOLS:
+                    llm = llm.bind_tools(MASTER_TOOLS)
 
-            return llm.invoke(messages)
+                return llm.invoke(messages)
 
-        except Exception as e:
-            err_str = str(e).lower()
-            is_rate_limit = any(term in err_str for term in ["rate limit", "429", "quota", "too many requests", "tpm", "rpm"])
-            last_error = e
-            if is_rate_limit and idx < len(api_configs) - 1:
-                continue
-            elif not is_rate_limit:
-                raise e
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = any(term in err_str for term in ["rate limit", "429", "quota", "too many requests", "tpm", "rpm"])
+                last_error = e
+                if is_rate_limit and attempt == 0:
+                    time.sleep(2)
+                    continue
+                elif idx < len(api_configs) - 1:
+                    break
+                else:
+                    raise e
 
     if last_error:
         raise last_error

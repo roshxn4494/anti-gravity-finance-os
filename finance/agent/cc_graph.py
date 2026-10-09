@@ -63,7 +63,7 @@ def _get_api_configs() -> list[dict]:
 
     nim_key = os.environ.get("NVIDIA_NIM_API_KEY")
     nim_url = os.environ.get("NVIDIA_NIM_BASE_URL") or "https://integrate.api.nvidia.com/v1"
-    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "nvidia/llama-3.1-nemotron-70b-instruct"
+    nim_model = os.environ.get("NVIDIA_NIM_MODEL") or "meta/llama-3.2-90b-vision-instruct"
     if nim_key:
         configs.append({
             "provider": "nvidia_nim",
