@@ -142,6 +142,7 @@ def tab_upload():
         g_user = os.getenv("GMAIL_USER", "ronaldoroshan@gmail.com")
         y_user = os.getenv("YAHOO_USER", "ronaldoroshan@yahoo.in")
         pdf_pwds_list = profile.get_pdf_passwords()
+        pdf_pwds_default = ", ".join(pdf_pwds_list) if pdf_pwds_list else ""
 
         st.markdown(f"""
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 16px;">
